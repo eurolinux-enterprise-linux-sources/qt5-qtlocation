@@ -304,7 +304,7 @@ void QGeoMapPolygonGeometry::updateScreenPoints(const QGeoMap &map)
         screenIndices_.clear();
         for (const auto &p : poly)
             screenVertices_ << QPointF(p[0], p[1]);
-        std::vector<N> indices = mapbox::earcut<N>(polygon);
+        std::vector<N> indices = qt_mapbox::earcut<N>(polygon);
         for (const auto &i: indices)
             screenIndices_ << quint32(i);
     }
@@ -374,6 +374,7 @@ void QDeclarativePolygonMapItem::setMap(QDeclarativeGeoMap *quickMap, QGeoMap *m
 
     This property holds the ordered list of coordinates which
     define the polygon.
+    Having less than 3 different coordinates in the path results in undefined behavior.
 
     \sa addCoordinate, removeCoordinate
 */

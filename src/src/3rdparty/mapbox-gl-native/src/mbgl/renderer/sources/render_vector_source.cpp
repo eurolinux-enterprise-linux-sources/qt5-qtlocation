@@ -76,9 +76,10 @@ std::vector<std::reference_wrapper<RenderTile>> RenderVectorSource::getRenderTil
 std::unordered_map<std::string, std::vector<Feature>>
 RenderVectorSource::queryRenderedFeatures(const ScreenLineString& geometry,
                                           const TransformState& transformState,
-                                          const RenderStyle& style,
-                                          const RenderedQueryOptions& options) const {
-    return tilePyramid.queryRenderedFeatures(geometry, transformState, style, options);
+                                          const std::vector<const RenderLayer*>& layers,
+                                          const RenderedQueryOptions& options,
+                                          const CollisionIndex& collisionIndex) const {
+    return tilePyramid.queryRenderedFeatures(geometry, transformState, layers, options, collisionIndex);
 }
 
 std::vector<Feature> RenderVectorSource::querySourceFeatures(const SourceQueryOptions& options) const {

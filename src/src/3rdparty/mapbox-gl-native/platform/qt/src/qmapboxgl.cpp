@@ -14,7 +14,17 @@
 #include <mbgl/style/conversion.hpp>
 #include <mbgl/style/conversion/layer.hpp>
 #include <mbgl/style/conversion/source.hpp>
+#include <mbgl/style/conversion/filter.hpp>
+#include <mbgl/style/conversion/geojson.hpp>
+#include <mbgl/style/filter.hpp>
 #include <mbgl/style/layers/custom_layer.hpp>
+#include <mbgl/style/layers/background_layer.hpp>
+#include <mbgl/style/layers/circle_layer.hpp>
+#include <mbgl/style/layers/fill_layer.hpp>
+#include <mbgl/style/layers/fill_extrusion_layer.hpp>
+#include <mbgl/style/layers/line_layer.hpp>
+#include <mbgl/style/layers/raster_layer.hpp>
+#include <mbgl/style/layers/symbol_layer.hpp>
 #include <mbgl/style/sources/geojson_source.hpp>
 #include <mbgl/style/transition_options.hpp>
 #include <mbgl/style/image.hpp>
@@ -29,6 +39,7 @@
 #include <mbgl/util/run_loop.hpp>
 #include <mbgl/util/shared_thread_pool.hpp>
 #include <mbgl/util/traits.hpp>
+#include <mbgl/actor/scheduler.hpp>
 
 #if QT_VERSION >= 0x050000
 #include <QGuiApplication>
@@ -100,8 +111,13 @@ std::unique_ptr<mbgl::style::Image> toStyleImage(const QString &id, const QImage
         .rgbSwapped()
         .convertToFormat(QImage::Format_ARGB32_Premultiplied);
 
+#if QT_VERSION >= 0x051000
+    auto img = std::make_unique<uint8_t[]>(swapped.sizeInBytes());
+    memcpy(img.get(), swapped.constBits(), swapped.sizeInBytes());
+#else
     auto img = std::make_unique<uint8_t[]>(swapped.byteCount());
     memcpy(img.get(), swapped.constBits(), swapped.byteCount());
+#endif
 
     return std::make_unique<mbgl::style::Image>(
         id.toStdString(),
@@ -139,9 +155,11 @@ std::unique_ptr<mbgl::style::Image> toStyleImage(const QString &id, const QImage
     reset before each rendering. Use this mode if the intention is to only draw a
     fullscreen map.
 
-    \value SharedGLContext  The OpenGL context is shared and the state will be restored
-    before rendering. This mode is safer when OpenGL calls are performed prior of after
-    we call QMapboxGL::render for rendering a map.
+    \value SharedGLContext  The OpenGL context is shared and the state will be
+    marked dirty - which invalidates any previously assumed GL state. The
+    embedder is responsible for clearing up the viewport prior to calling
+    QMapboxGL::render. The embedder is also responsible for resetting its own
+    GL state after QMapboxGL::render has finished, if needed.
 
     \sa contextMode()
 */
@@ -359,6 +377,27 @@ QString QMapboxGLSettings::apiBaseUrl() const
 void QMapboxGLSettings::setApiBaseUrl(const QString& url)
 {
     m_apiBaseUrl = url;
+}
+
+/*!
+    Returns resource transformation callback used to transform requested URLs.
+*/
+std::function<std::string(const std::string &&)> QMapboxGLSettings::resourceTransform() const
+{
+    return m_resourceTransform;
+}
+
+/*!
+    Sets the resource \a transform callback.
+
+    When given, resource transformation callback will be used to transform the
+    requested resource URLs before they are requested from internet. This can be
+    used add or remove custom parameters, or reroute certain requests to other
+    servers or endpoints.
+*/
+void QMapboxGLSettings::setResourceTransform(const std::function<std::string(const std::string &&)> &transform)
+{
+    m_resourceTransform = transform;
 }
 
 /*!
@@ -850,7 +889,7 @@ void QMapboxGL::removeAnnotation(QMapbox::AnnotationID id)
 }
 
 /*!
-    Sets a layout \a property \a value to an existing \a layer. The \a property_ string can be any
+    Sets a layout \a property_ \a value to an existing \a layer. The \a property_ string can be any
     as defined by the \l {https://www.mapbox.com/mapbox-gl-style-spec/} {Mapbox style specification}
     for layout properties.
 
@@ -901,7 +940,7 @@ void QMapboxGL::setLayoutProperty(const QString& layer, const QString& property_
 }
 
 /*!
-    Sets a paint \a property_ \a value to an existing \a layer. The \a property string can be any
+    Sets a paint \a property_ \a value to an existing \a layer. The \a property_ string can be any
     as defined by the \l {https://www.mapbox.com/mapbox-gl-style-spec/} {Mapbox style specification}
     for paint properties.
 
@@ -1499,13 +1538,25 @@ QMapboxGLPrivate::QMapboxGLPrivate(QMapboxGL *q, const QMapboxGLSettings &settin
         settings.cacheDatabaseMaximumSize()))
     , threadPool(mbgl::sharedThreadPool())
 {
+    // Setup resource transform if needed
+    if (settings.resourceTransform()) {
+      m_resourceTransform =
+        std::make_unique< mbgl::Actor<mbgl::ResourceTransform> >( *mbgl::Scheduler::GetCurrent(),
+                                                                  [callback = settings.resourceTransform()]
+                                                                  (mbgl::Resource::Kind , const std::string&& url_)  -> std::string {
+                                                                    return callback(std::move(url_));
+                                                                  }
+                                                                  );
+      fileSourceObj->setResourceTransform(m_resourceTransform->self());
+    }
+
     // Setup and connect the renderer frontend
     frontend = std::make_unique<QMapboxGLRendererFrontend>(
             std::make_unique<mbgl::Renderer>(*this, pixelRatio, *fileSourceObj, *threadPool,
                                              static_cast<mbgl::GLContextMode>(settings.contextMode())),
             *this);
     connect(frontend.get(), SIGNAL(updated()), this, SLOT(invalidate()));
-    
+
     mapObj = std::make_unique<mbgl::Map>(
             *frontend,
             *this, sanitizedSize(size),
@@ -1528,18 +1579,20 @@ QMapboxGLPrivate::~QMapboxGLPrivate()
 {
 }
 
-mbgl::Size QMapboxGLPrivate::framebufferSize() const {
+mbgl::Size QMapboxGLPrivate::getFramebufferSize() const {
     return sanitizedSize(fbSize);
 }
 
 void QMapboxGLPrivate::updateAssumedState() {
     assumeFramebufferBinding(fbObject);
-    assumeViewport(0, 0, framebufferSize());
+#if QT_VERSION >= 0x050600
+    assumeViewport(0, 0, getFramebufferSize());
+#endif
 }
 
 void QMapboxGLPrivate::bind() {
     setFramebufferBinding(fbObject);
-    setViewport(0, 0, framebufferSize());
+    setViewport(0, 0, getFramebufferSize());
 }
 
 void QMapboxGLPrivate::invalidate()
@@ -1642,7 +1695,7 @@ void QMapboxGLPrivate::onSourceChanged(mbgl::style::Source&)
     Initializes an OpenGL extension function such as Vertex Array Objects (VAOs),
     required by Mapbox GL Native engine.
 */
-mbgl::gl::ProcAddress QMapboxGLPrivate::initializeExtension(const char* name) {
+mbgl::gl::ProcAddress QMapboxGLPrivate::getExtensionFunctionPointer(const char* name) {
 #if QT_VERSION >= 0x050000
     QOpenGLContext* thisContext = QOpenGLContext::currentContext();
     return thisContext->getProcAddress(name);

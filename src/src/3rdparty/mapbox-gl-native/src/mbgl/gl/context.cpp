@@ -87,7 +87,9 @@ static_assert(std::is_same<BinaryProgramFormat, GLenum>::value, "OpenGL type mis
 Context::Context() = default;
 
 Context::~Context() {
-    reset();
+    if (cleanupOnDestruction) {
+        reset();
+    }
 }
 
 void Context::initializeExtensions(const std::function<gl::ProcAddress(const char*)>& getProcAddress) {
@@ -224,15 +226,24 @@ void Context::updateVertexBuffer(UniqueBuffer& buffer, const void* data, std::si
     MBGL_CHECK_ERROR(glBufferSubData(GL_ARRAY_BUFFER, 0, size, data));
 }
 
-UniqueBuffer Context::createIndexBuffer(const void* data, std::size_t size) {
+UniqueBuffer Context::createIndexBuffer(const void* data, std::size_t size, const BufferUsage usage) {
     BufferID id = 0;
     MBGL_CHECK_ERROR(glGenBuffers(1, &id));
     UniqueBuffer result { std::move(id), { this } };
     bindVertexArray = 0;
     globalVertexArrayState.indexBuffer = result;
-    MBGL_CHECK_ERROR(glBufferData(GL_ELEMENT_ARRAY_BUFFER, size, data, GL_STATIC_DRAW));
+    MBGL_CHECK_ERROR(glBufferData(GL_ELEMENT_ARRAY_BUFFER, size, data, static_cast<GLenum>(usage)));
     return result;
 }
+
+void Context::updateIndexBuffer(UniqueBuffer& buffer, const void* data, std::size_t size) {
+    // Be sure to unbind any existing vertex array object before binding the index buffer
+    // so that we don't mess up another VAO
+    bindVertexArray = 0;
+    globalVertexArrayState.indexBuffer = buffer;
+    MBGL_CHECK_ERROR(glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, size, data));
+}
+
 
 UniqueTexture Context::createTexture() {
     if (pooledTextures.empty()) {
@@ -246,7 +257,14 @@ UniqueTexture Context::createTexture() {
 }
 
 bool Context::supportsVertexArrays() const {
-    return vertexArray &&
+    static bool blacklisted = []() {
+        // Blacklist Adreno 3xx as it crashes on glBuffer(Sub)Data
+        const std::string renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+        return renderer.find("Adreno (TM) 3") != std::string::npos;
+    }();
+
+    return !blacklisted &&
+           vertexArray &&
            vertexArray->genVertexArrays &&
            vertexArray->bindVertexArray &&
            vertexArray->deleteVertexArrays;
@@ -457,6 +475,9 @@ Framebuffer Context::createFramebuffer(const Texture& color) {
 Framebuffer
 Context::createFramebuffer(const Texture& color,
                            const Renderbuffer<RenderbufferType::DepthComponent>& depthTarget) {
+    if (color.size != depthTarget.size) {
+        throw std::runtime_error("Renderbuffer size mismatch");
+    }
     auto fbo = createFramebuffer();
     bindFramebuffer = fbo;
     MBGL_CHECK_ERROR(glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color.texture, 0));
@@ -481,7 +502,7 @@ Context::createTexture(const Size size, const void* data, TextureFormat format, 
 
 void Context::updateTexture(
     TextureID id, const Size size, const void* data, TextureFormat format, TextureUnit unit) {
-    activeTexture = unit;
+    activeTextureUnit = unit;
     texture[unit] = id;
     MBGL_CHECK_ERROR(glTexImage2D(GL_TEXTURE_2D, 0, static_cast<GLenum>(format), size.width,
                                   size.height, 0, static_cast<GLenum>(format), GL_UNSIGNED_BYTE,
@@ -495,7 +516,7 @@ void Context::bindTexture(Texture& obj,
                           TextureWrap wrapX,
                           TextureWrap wrapY) {
     if (filter != obj.filter || mipmap != obj.mipmap || wrapX != obj.wrapX || wrapY != obj.wrapY) {
-        activeTexture = unit;
+        activeTextureUnit = unit;
         texture[unit] = obj.texture;
 
         if (filter != obj.filter || mipmap != obj.mipmap) {
@@ -526,7 +547,7 @@ void Context::bindTexture(Texture& obj,
     } else if (texture[unit] != obj.texture) {
         // We are checking first to avoid setting the active texture without a subsequent
         // texture bind.
-        activeTexture = unit;
+        activeTextureUnit = unit;
         texture[unit] = obj.texture;
     }
 }
@@ -558,7 +579,7 @@ void Context::setDirtyState() {
     clearStencil.setDirty();
     program.setDirty();
     lineWidth.setDirty();
-    activeTexture.setDirty();
+    activeTextureUnit.setDirty();
     pixelStorePack.setDirty();
     pixelStoreUnpack.setDirty();
 #if not MBGL_USE_GLES2
@@ -584,19 +605,19 @@ void Context::clear(optional<mbgl::Color> color,
     if (color) {
         mask |= GL_COLOR_BUFFER_BIT;
         clearColor = *color;
-        colorMask = { true, true, true, true };
+        colorMask = value::ColorMask::Default;
     }
 
     if (depth) {
         mask |= GL_DEPTH_BUFFER_BIT;
         clearDepth = *depth;
-        depthMask = true;
+        depthMask = value::DepthMask::Default;
     }
 
     if (stencil) {
         mask |= GL_STENCIL_BUFFER_BIT;
         clearStencil = *stencil;
-        stencilMask = 0xFF;
+        stencilMask = value::StencilMask::Default;
     }
 
     MBGL_CHECK_ERROR(glClear(mask));
@@ -709,8 +730,10 @@ void Context::performCleanup() {
 
     if (!abandonedTextures.empty()) {
         for (const auto id : abandonedTextures) {
-            if (activeTexture == id) {
-                activeTexture.setDirty();
+            for (auto& binding : texture) {
+                if (binding == id) {
+                    binding.setDirty();
+                }
             }
         }
         MBGL_CHECK_ERROR(glDeleteTextures(int(abandonedTextures.size()), abandonedTextures.data()));

@@ -1,6 +1,6 @@
 #include <mbgl/renderer/renderer.hpp>
 #include <mbgl/renderer/renderer_impl.hpp>
-#include <mbgl/renderer/update_parameters.hpp>
+#include <mbgl/renderer/backend_scope.hpp>
 #include <mbgl/annotation/annotation_manager.hpp>
 
 namespace mbgl {
@@ -15,7 +15,14 @@ Renderer::Renderer(RendererBackend& backend,
                                       contextMode_, std::move(programCacheDir_))) {
 }
 
-Renderer::~Renderer() = default;
+Renderer::~Renderer() {
+    BackendScope guard { impl->backend };
+    impl.reset();
+}
+
+void Renderer::markContextLost() {
+    impl->markContextLost();
+}
 
 void Renderer::setObserver(RendererObserver* observer) {
     impl->setObserver(observer);
@@ -50,6 +57,21 @@ AnnotationIDs Renderer::queryPointAnnotations(const ScreenBox& box) const {
     RenderedQueryOptions options;
     options.layerIDs = {{ AnnotationManager::PointLayerID }};
     auto features = queryRenderedFeatures(box, options);
+    return getAnnotationIDs(features);
+}
+
+AnnotationIDs Renderer::queryShapeAnnotations(const ScreenBox& box) const {
+    auto features = impl->queryShapeAnnotations({
+        box.min,
+        {box.max.x, box.min.y},
+        box.max,
+        {box.min.x, box.max.y},
+        box.min
+    });
+    return getAnnotationIDs(features);
+}
+    
+AnnotationIDs Renderer::getAnnotationIDs(const std::vector<Feature>& features) const {
     std::set<AnnotationID> set;
     for (auto &feature : features) {
         assert(feature.id);
@@ -72,6 +94,7 @@ void Renderer::dumpDebugLogs() {
 }
 
 void Renderer::onLowMemory() {
+    BackendScope guard { impl->backend };
     impl->onLowMemory();
 }
 

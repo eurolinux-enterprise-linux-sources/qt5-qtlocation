@@ -18,13 +18,13 @@ namespace mbgl {
 class PaintParameters;
 class TransformState;
 class RenderTile;
-class RenderStyle;
 class RenderLayer;
 class RenderedQueryOptions;
 class SourceQueryOptions;
 class Tile;
 class RenderSourceObserver;
 class TileParameters;
+class CollisionIndex;
 
 class RenderSource : protected TileObserver {
 public:
@@ -63,8 +63,9 @@ public:
     virtual std::unordered_map<std::string, std::vector<Feature>>
     queryRenderedFeatures(const ScreenLineString& geometry,
                           const TransformState& transformState,
-                          const RenderStyle& style,
-                          const RenderedQueryOptions& options) const = 0;
+                          const std::vector<const RenderLayer*>& layers,
+                          const RenderedQueryOptions& options,
+                          const CollisionIndex& collisionIndex) const = 0;
 
     virtual std::vector<Feature>
     querySourceFeatures(const SourceQueryOptions&) const = 0;

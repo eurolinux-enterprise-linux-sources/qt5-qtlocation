@@ -30,8 +30,9 @@ public:
     std::unordered_map<std::string, std::vector<Feature>>
     queryRenderedFeatures(const ScreenLineString& geometry,
                           const TransformState& transformState,
-                          const RenderStyle& style,
-                          const RenderedQueryOptions& options) const final;
+                          const std::vector<const RenderLayer*>& layers,
+                          const RenderedQueryOptions& options,
+                          const CollisionIndex&) const final;
 
     std::vector<Feature>
     querySourceFeatures(const SourceQueryOptions&) const final;
@@ -48,7 +49,7 @@ private:
 
 template <>
 inline bool RenderSource::is<RenderGeoJSONSource>() const {
-    return baseImpl->type == SourceType::GeoJSON;
+    return baseImpl->type == style::SourceType::GeoJSON;
 }
 
 } // namespace mbgl

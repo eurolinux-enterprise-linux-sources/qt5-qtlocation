@@ -83,8 +83,9 @@ void RenderImageSource::finishRender(PaintParameters& parameters) {
 std::unordered_map<std::string, std::vector<Feature>>
 RenderImageSource::queryRenderedFeatures(const ScreenLineString&,
                                          const TransformState&,
-                                         const RenderStyle&,
-                                         const RenderedQueryOptions&) const {
+                                         const std::vector<const RenderLayer*>&,
+                                         const RenderedQueryOptions&,
+                                         const CollisionIndex&) const {
     return std::unordered_map<std::string, std::vector<Feature>> {};
 }
 

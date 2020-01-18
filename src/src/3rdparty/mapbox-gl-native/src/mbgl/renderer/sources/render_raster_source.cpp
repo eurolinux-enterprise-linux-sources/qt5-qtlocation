@@ -73,8 +73,9 @@ std::vector<std::reference_wrapper<RenderTile>> RenderRasterSource::getRenderTil
 std::unordered_map<std::string, std::vector<Feature>>
 RenderRasterSource::queryRenderedFeatures(const ScreenLineString&,
                                           const TransformState&,
-                                          const RenderStyle&,
-                                          const RenderedQueryOptions&) const {
+                                          const std::vector<const RenderLayer*>&,
+                                          const RenderedQueryOptions&,
+                                          const CollisionIndex& ) const {
     return std::unordered_map<std::string, std::vector<Feature>> {};
 }
 

@@ -1,7 +1,7 @@
 #pragma once
 
-#include <mbgl/map/mode.hpp>
 #include <mbgl/renderer/query.hpp>
+#include <mbgl/renderer/mode.hpp>
 #include <mbgl/annotation/annotation.hpp>
 #include <mbgl/util/geo.hpp>
 #include <mbgl/util/geo.hpp>
@@ -28,6 +28,8 @@ public:
              const optional<std::string> programCacheDir = {});
     ~Renderer();
 
+    void markContextLost();
+
     void setObserver(RendererObserver*);
 
     void render(const UpdateParameters&);
@@ -38,6 +40,8 @@ public:
     std::vector<Feature> queryRenderedFeatures(const ScreenBox& box, const RenderedQueryOptions& options = {}) const;
     std::vector<Feature> querySourceFeatures(const std::string& sourceID, const SourceQueryOptions& options = {}) const;
     AnnotationIDs queryPointAnnotations(const ScreenBox& box) const;
+    AnnotationIDs queryShapeAnnotations(const ScreenBox& box) const;
+    AnnotationIDs getAnnotationIDs(const std::vector<Feature>&) const;
 
     // Debug
     void dumpDebugLogs();

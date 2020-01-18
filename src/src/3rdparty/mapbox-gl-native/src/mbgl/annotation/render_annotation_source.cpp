@@ -38,7 +38,9 @@ void RenderAnnotationSource::update(Immutable<style::Source::Impl> baseImpl_,
                        parameters,
                        SourceType::Annotations,
                        util::tileSize,
-                       { 0, util::DEFAULT_MAX_ZOOM },
+                       // Zoom level 16 is typically sufficient for annotations.
+                       // See https://github.com/mapbox/mapbox-gl-native/issues/10197
+                       { 0, 16 },
                        [&] (const OverscaledTileID& tileID) {
                            return std::make_unique<AnnotationTile>(tileID, parameters);
                        });
@@ -60,9 +62,10 @@ std::vector<std::reference_wrapper<RenderTile>> RenderAnnotationSource::getRende
 std::unordered_map<std::string, std::vector<Feature>>
 RenderAnnotationSource::queryRenderedFeatures(const ScreenLineString& geometry,
                                               const TransformState& transformState,
-                                              const RenderStyle& style,
-                                              const RenderedQueryOptions& options) const {
-    return tilePyramid.queryRenderedFeatures(geometry, transformState, style, options);
+                                              const std::vector<const RenderLayer*>& layers,
+                                              const RenderedQueryOptions& options,
+                                              const CollisionIndex& collisionIndex) const {
+    return tilePyramid.queryRenderedFeatures(geometry, transformState, layers, options, collisionIndex);
 }
 
 std::vector<Feature> RenderAnnotationSource::querySourceFeatures(const SourceQueryOptions&) const {

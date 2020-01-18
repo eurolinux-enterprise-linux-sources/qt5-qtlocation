@@ -61,7 +61,7 @@ public:
     optional<std::pair<BinaryProgramFormat, std::string>> getBinaryProgram(ProgramID) const;
 
     template <class Vertex, class DrawMode>
-    VertexBuffer<Vertex, DrawMode> createVertexBuffer(VertexVector<Vertex, DrawMode>&& v, const BufferUsage usage=BufferUsage::StaticDraw) {
+    VertexBuffer<Vertex, DrawMode> createVertexBuffer(VertexVector<Vertex, DrawMode>&& v, const BufferUsage usage = BufferUsage::StaticDraw) {
         return VertexBuffer<Vertex, DrawMode> {
             v.vertexSize(),
             createVertexBuffer(v.data(), v.byteSize(), usage)
@@ -75,10 +75,17 @@ public:
     }
 
     template <class DrawMode>
-    IndexBuffer<DrawMode> createIndexBuffer(IndexVector<DrawMode>&& v) {
+    IndexBuffer<DrawMode> createIndexBuffer(IndexVector<DrawMode>&& v, const BufferUsage usage = BufferUsage::StaticDraw) {
         return IndexBuffer<DrawMode> {
-            createIndexBuffer(v.data(), v.byteSize())
+            v.indexSize(),
+            createIndexBuffer(v.data(), v.byteSize(), usage)
         };
+    }
+    
+    template <class DrawMode>
+    void updateIndexBuffer(IndexBuffer<DrawMode>& buffer, IndexVector<DrawMode>&& v) {
+        assert(v.indexSize() == buffer.indexCount);
+        updateIndexBuffer(buffer.buffer, v.data(), v.byteSize());
     }
 
     template <RenderbufferType type>
@@ -190,7 +197,13 @@ public:
         return vertexArray.get();
     }
 
+    void setCleanupOnDestruction(bool cleanup) {
+        cleanupOnDestruction = cleanup;
+    }
+
 private:
+    bool cleanupOnDestruction = true;
+
     std::unique_ptr<extension::Debugging> debugging;
     std::unique_ptr<extension::VertexArray> vertexArray;
 #if MBGL_HAS_BINARY_PROGRAMS
@@ -198,7 +211,7 @@ private:
 #endif
 
 public:
-    State<value::ActiveTexture> activeTexture;
+    State<value::ActiveTextureUnit> activeTextureUnit;
     State<value::BindFramebuffer> bindFramebuffer;
     State<value::Viewport> viewport;
     State<value::ScissorTest> scissorTest;
@@ -244,7 +257,8 @@ private:
 
     UniqueBuffer createVertexBuffer(const void* data, std::size_t size, const BufferUsage usage);
     void updateVertexBuffer(UniqueBuffer& buffer, const void* data, std::size_t size);
-    UniqueBuffer createIndexBuffer(const void* data, std::size_t size);
+    UniqueBuffer createIndexBuffer(const void* data, std::size_t size, const BufferUsage usage);
+    void updateIndexBuffer(UniqueBuffer& buffer, const void* data, std::size_t size);
     UniqueTexture createTexture(Size size, const void* data, TextureFormat, TextureUnit);
     void updateTexture(TextureID, Size size, const void* data, TextureFormat, TextureUnit);
     UniqueFramebuffer createFramebuffer();
@@ -275,8 +289,13 @@ private:
     std::vector<RenderbufferID> abandonedRenderbuffers;
 
 public:
-    // For testing
+    // For testing and Windows because Qt + ANGLE
+    // crashes with VAO enabled.
+#if defined(_WINDOWS)
+    bool disableVAOExtension = true;
+#else
     bool disableVAOExtension = false;
+#endif
 };
 
 } // namespace gl
