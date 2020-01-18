@@ -1,9 +1,9 @@
 /****************************************************************************
 **
-** Copyright (C) 2013 Aaron McCarthy <mccarthy.aaron@gmail.com>
+** Copyright (C) 2016 The Qt Company Ltd.
 ** Contact: http://www.qt.io/licensing/
 **
-** This file is part of the QtLocation module of the Qt Toolkit.
+** This file is part of the test suite of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL21$
 ** Commercial License Usage
@@ -31,38 +31,28 @@
 **
 ****************************************************************************/
 
-#ifndef QGEOMAPREPLYOSM_H
-#define QGEOMAPREPLYOSM_H
+#ifndef TESTHELPER_H
+#define TESTHELPER_H
 
-#include "qgeotilefetcherosm.h"
-#include "qgeotileproviderosm.h"
-
-#include <QtNetwork/QNetworkReply>
-#include <QtLocation/private/qgeotiledmapreply_p.h>
-#include <QtCore/qpointer.h>
+#include <QObject>
+#include <QSignalSpy>
+#include <QQuickItem>
+#include <QQuickWindow>
 
 QT_BEGIN_NAMESPACE
 
-class QGeoMapReplyOsm : public QGeoTiledMapReply
+class TestHelper: public QObject
 {
     Q_OBJECT
-
 public:
-    QGeoMapReplyOsm(QNetworkReply *reply, const QGeoTileSpec &spec, const QString &imageFormat, QObject *parent = 0);
-    ~QGeoMapReplyOsm();
-
-    void abort();
-
-    QNetworkReply *networkReply() const;
-
-private Q_SLOTS:
-    void networkReplyFinished();
-    void networkReplyError(QNetworkReply::NetworkError error);
-
-private:
-    QPointer<QNetworkReply> m_reply;
+    TestHelper(QObject *parent = Q_NULLPTR):QObject(parent){}
+    Q_INVOKABLE bool waitForPolished(QQuickItem *item, int timeout = 10000) const
+    {
+        QSignalSpy spy(item->window(), &QQuickWindow::afterAnimating);
+        return spy.wait(timeout);
+    }
 };
 
 QT_END_NAMESPACE
 
-#endif // QGEOMAPREPLYOSM_H
+#endif // TESTHELPER_H
