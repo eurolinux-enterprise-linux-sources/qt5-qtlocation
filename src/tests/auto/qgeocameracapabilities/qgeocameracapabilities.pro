@@ -6,5 +6,4 @@ INCLUDEPATH += ../../../src/location/maps
 
 SOURCES += tst_qgeocameracapabilities.cpp
 
-QT += location positioning-private testlib
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
+QT += location-private positioning-private testlib

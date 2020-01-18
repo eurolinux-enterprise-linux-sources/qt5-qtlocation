@@ -1,31 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 Aaron McCarthy <mccarthy.aaron@gmail.com>
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 Aaron McCarthy <mccarthy.aaron@gmail.com>
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtFoo module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -47,27 +53,23 @@ QT_BEGIN_NAMESPACE
 
 QPlaceSearchReplyOsm::QPlaceSearchReplyOsm(const QPlaceSearchRequest &request,
                                              QNetworkReply *reply, QPlaceManagerEngineOsm *parent)
-:   QPlaceSearchReply(parent), m_reply(reply)
+:   QPlaceSearchReply(parent)
 {
     Q_ASSERT(parent);
-
+    if (!reply) {
+        setError(UnknownError, QStringLiteral("Null reply"));
+        return;
+    }
     setRequest(request);
 
-    if (!m_reply)
-        return;
-
-    m_reply->setParent(this);
-    connect(m_reply, SIGNAL(finished()), this, SLOT(replyFinished()));
+    connect(reply, SIGNAL(finished()), this, SLOT(replyFinished()));
+    connect(reply, SIGNAL(error(QNetworkReply::NetworkError)), this, SLOT(networkError(QNetworkReply::NetworkError)));
+    connect(this, &QPlaceReply::aborted, reply, &QNetworkReply::abort);
+    connect(this, &QObject::destroyed, reply, &QObject::deleteLater);
 }
 
 QPlaceSearchReplyOsm::~QPlaceSearchReplyOsm()
 {
-}
-
-void QPlaceSearchReplyOsm::abort()
-{
-    if (m_reply)
-        m_reply->abort();
 }
 
 void QPlaceSearchReplyOsm::setError(QPlaceReply::Error errorCode, const QString &errorString)
@@ -93,14 +95,11 @@ static QGeoRectangle parseBoundingBox(const QJsonArray &coordinates)
 
 void QPlaceSearchReplyOsm::replyFinished()
 {
-    QNetworkReply *reply = m_reply;
-    m_reply->deleteLater();
-    m_reply = 0;
+    QNetworkReply *reply = static_cast<QNetworkReply *>(sender());
+    reply->deleteLater();
 
-    if (reply->error() != QNetworkReply::NoError) {
-        setError(CommunicationError, tr("Communication error"));
+    if (reply->error() != QNetworkReply::NoError)
         return;
-    }
 
     QJsonDocument document = QJsonDocument::fromJson(reply->readAll());
     if (!document.isArray()) {
@@ -155,6 +154,14 @@ void QPlaceSearchReplyOsm::replyFinished()
 
     setFinished(true);
     emit finished();
+}
+
+void QPlaceSearchReplyOsm::networkError(QNetworkReply::NetworkError error)
+{
+    Q_UNUSED(error)
+    QNetworkReply *reply = static_cast<QNetworkReply *>(sender());
+    reply->deleteLater();
+    setError(QPlaceReply::CommunicationError, reply->errorString());
 }
 
 QPlaceResult QPlaceSearchReplyOsm::parsePlaceResult(const QJsonObject &item) const

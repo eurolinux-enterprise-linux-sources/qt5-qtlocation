@@ -39,7 +39,9 @@
 #include <QCoreApplication>
 #include <QMutex>
 #include <qfunctions_winrt.h>
+#ifdef Q_OS_WINRT
 #include <private/qeventdispatcher_winrt_p.h>
+#endif
 
 #include <functional>
 #include <windows.system.h>
@@ -56,13 +58,21 @@ using namespace ABI::Windows::Foundation::Collections;
 typedef ITypedEventHandler<Geolocator *, PositionChangedEventArgs *> GeoLocatorPositionHandler;
 typedef ITypedEventHandler<Geolocator *, StatusChangedEventArgs *> GeoLocatorStatusHandler;
 typedef IAsyncOperationCompletedHandler<Geoposition*> PositionHandler;
-#if _MSC_VER >= 1900
 typedef IAsyncOperationCompletedHandler<GeolocationAccessStatus> AccessHandler;
-#endif
+
+Q_DECLARE_METATYPE(QGeoPositionInfo)
 
 QT_BEGIN_NAMESPACE
 
-Q_DECLARE_METATYPE(QGeoPositionInfo)
+#ifndef Q_OS_WINRT
+namespace QEventDispatcherWinRT {
+HRESULT runOnXamlThread(const std::function<HRESULT ()> &delegate, bool waitForRun = true)
+{
+    Q_UNUSED(waitForRun);
+    return delegate();
+}
+}
+#endif
 
 class QGeoPositionInfoSourceWinRTPrivate {
 public:
@@ -87,33 +97,45 @@ QGeoPositionInfoSourceWinRT::QGeoPositionInfoSourceWinRT(QObject *parent)
     d->updatesOngoing = false;
 
     qRegisterMetaType<QGeoPositionInfo>();
+}
 
-    requestAccess();
+QGeoPositionInfoSourceWinRT::~QGeoPositionInfoSourceWinRT()
+{
+}
+
+int QGeoPositionInfoSourceWinRT::init()
+{
+    Q_D(QGeoPositionInfoSourceWinRT);
+    if (!requestAccess()) {
+        qWarning ("Location access failed.");
+        return -1;
+    }
     HRESULT hr = QEventDispatcherWinRT::runOnXamlThread([this, d]() {
         HRESULT hr = RoActivateInstance(HString::MakeReference(RuntimeClass_Windows_Devices_Geolocation_Geolocator).Get(),
                                         &d->locator);
         RETURN_HR_IF_FAILED("Could not initialize native location services.");
 
-        // StatusChanged throws an exception on Windows 8.1
-#if _MSC_VER >= 1900
         hr = d->locator->add_StatusChanged(Callback<GeoLocatorStatusHandler>(this,
                                                                              &QGeoPositionInfoSourceWinRT::onStatusChanged).Get(),
                                            &d->statusToken);
         RETURN_HR_IF_FAILED("Could not add status callback.");
-#endif
 
         hr = d->locator->put_ReportInterval(1000);
         RETURN_HR_IF_FAILED("Could not initialize report interval.");
 
         return hr;
     });
-    Q_ASSERT_SUCCEEDED(hr);
+    if (FAILED(hr)) {
+        setError(QGeoPositionInfoSource::UnknownSourceError);
+        qErrnoWarning(hr, "Could not register status changed callback");
+        return -1;
+    }
 
     hr = d->locator->put_DesiredAccuracy(PositionAccuracy::PositionAccuracy_Default);
     if (FAILED(hr)) {
         setError(QGeoPositionInfoSource::UnknownSourceError);
         qErrnoWarning(hr, "Could not initialize desired accuracy.");
-        return;
+        return -1;
     }
 
     d->positionToken.value = 0;
@@ -128,10 +150,7 @@ QGeoPositionInfoSourceWinRT::QGeoPositionInfoSourceWinRT(QObject *parent)
     setPreferredPositioningMethods(QGeoPositionInfoSource::AllPositioningMethods);
 
     connect(this, &QGeoPositionInfoSourceWinRT::nativePositionUpdate, this, &QGeoPositionInfoSourceWinRT::updateSynchronized);
-}
-
-QGeoPositionInfoSourceWinRT::~QGeoPositionInfoSourceWinRT()
-{
+    return 0;
 }
 
 QGeoPositionInfo QGeoPositionInfoSourceWinRT::lastKnownPosition(bool fromSatellitePositioningMethodsOnly) const
@@ -331,7 +350,7 @@ void QGeoPositionInfoSourceWinRT::virtualPositionUpdate()
     // We can only do this if we received a valid position before
     if (d->lastPosition.isValid()) {
         QGeoPositionInfo sent = d->lastPosition;
-        sent.setTimestamp(QDateTime::currentDateTime());
+        sent.setTimestamp(sent.timestamp().addMSecs(updateInterval()));
         d->lastPosition = sent;
         emit positionUpdated(sent);
     }
@@ -474,7 +493,36 @@ HRESULT QGeoPositionInfoSourceWinRT::onPositionChanged(IGeolocator *locator, IPo
         currentInfo.setAttribute(QGeoPositionInfo::GroundSpeed, value);
     }
 
-    currentInfo.setTimestamp(QDateTime::currentDateTime());
+    IReference<double> *heading;
+    hr = coord->get_Heading(&heading);
+    if (SUCCEEDED(hr) && heading) {
+        double value;
+        hr = heading->get_Value(&value);
+        double mod = 0;
+        value = modf(value, &mod);
+        value += static_cast<int>(mod) % 360;
+        if (value >=0 && value <= 359) // get_Value might return nan/-nan
+            currentInfo.setAttribute(QGeoPositionInfo::Direction, value);
+    }
+
+    DateTime dateTime;
+    hr = coord->get_Timestamp(&dateTime);
+
+    if (dateTime.UniversalTime > 0) {
+        ULARGE_INTEGER uLarge;
+        uLarge.QuadPart = dateTime.UniversalTime;
+        FILETIME fileTime;
+        fileTime.dwHighDateTime = uLarge.HighPart;
+        fileTime.dwLowDateTime = uLarge.LowPart;
+        SYSTEMTIME systemTime;
+        if (FileTimeToSystemTime(&fileTime, &systemTime)) {
+            currentInfo.setTimestamp(QDateTime(QDate(systemTime.wYear, systemTime.wMonth,
+                                                     systemTime.wDay),
+                                               QTime(systemTime.wHour, systemTime.wMinute,
+                                                     systemTime.wSecond, systemTime.wMilliseconds),
+                                               Qt::UTC));
+        }
+    }
 
     emit nativePositionUpdate(currentInfo);
 
@@ -490,7 +538,7 @@ HRESULT QGeoPositionInfoSourceWinRT::onStatusChanged(IGeolocator*, IStatusChange
 
 bool QGeoPositionInfoSourceWinRT::requestAccess() const
 {
-#if _MSC_VER >= 1900
+#ifdef Q_OS_WINRT
     static GeolocationAccessStatus accessStatus = GeolocationAccessStatus_Unspecified;
     static ComPtr<IGeolocatorStatics> statics;
 
@@ -515,9 +563,9 @@ bool QGeoPositionInfoSourceWinRT::requestAccess() const
     // We cannot wait inside the XamlThread as that would deadlock
     QWinRTFunctions::await(op, &accessStatus);
     return accessStatus == GeolocationAccessStatus_Allowed;
-#else // _MSC_VER < 1900
+#else // Q_OS_WINRT
     return true;
-#endif // _MSC_VER < 1900
+#endif // Q_OS_WINRT
 }
 
 QT_END_NAMESPACE

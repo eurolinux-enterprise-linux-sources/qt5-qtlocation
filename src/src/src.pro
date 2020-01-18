@@ -1,19 +1,26 @@
 TEMPLATE = subdirs
 
+clip2tri.subdir = 3rdparty/clip2tri
+poly2tri.subdir = 3rdparty/poly2tri
+clipper.subdir = 3rdparty/clipper
+
+SUBDIRS += clip2tri clipper poly2tri
+clip2tri.depends = clipper poly2tri
+
 SUBDIRS += positioning
-plugins.depends += positioning
+positioning.depends = clip2tri
 
 qtHaveModule(quick) {
-    SUBDIRS += 3rdparty
-
     SUBDIRS += location
-    location.depends += positioning 3rdparty
+    location.depends += positioning clip2tri
+
     plugins.depends += location
 
     SUBDIRS += imports
     imports.depends += positioning location
 }
 
+plugins.depends += positioning
 SUBDIRS += plugins
 
 !android:contains(QT_CONFIG, private_tests) {

@@ -36,6 +36,7 @@
 
 #include "qgeoserviceproviderpluginmapbox.h"
 #include "qgeotiledmappingmanagerenginemapbox.h"
+#include "qgeoroutingmanagerenginemapbox.h"
 
 #include <QtLocation/private/qgeotiledmappingmanagerengine_p.h>
 
@@ -51,18 +52,22 @@ QGeoCodingManagerEngine *QGeoServiceProviderFactoryMapbox::createGeocodingManage
     return 0;
 }
 
+static inline QString msgAccessTokenParameter()
+{
+    return QGeoServiceProviderFactoryMapbox::tr("Mapbox plugin requires a 'mapbox.access_token' parameter.\n"
+                                                "Please visit https://www.mapbox.com");
+}
+
 QGeoMappingManagerEngine *QGeoServiceProviderFactoryMapbox::createMappingManagerEngine(
     const QVariantMap &parameters, QGeoServiceProvider::Error *error, QString *errorString) const
 {
-    const QString mapId = parameters.value(QStringLiteral("mapbox.map_id")).toString();
     const QString accessToken = parameters.value(QStringLiteral("mapbox.access_token")).toString();
 
-    if (!mapId.isEmpty() && !accessToken.isEmpty()) {
+    if (!accessToken.isEmpty()) {
         return new QGeoTiledMappingManagerEngineMapbox(parameters, error, errorString);
     } else {
         *error = QGeoServiceProvider::MissingRequiredParameterError;
-        *errorString = tr("Mapbox plugin requires 'mapbox.map_id' and 'mapbox.access_token' parameters.\n"
-                          "Please visit https://www.mapbox.com");
+        *errorString = msgAccessTokenParameter();
         return 0;
     }
 }
@@ -70,11 +75,15 @@ QGeoMappingManagerEngine *QGeoServiceProviderFactoryMapbox::createMappingManager
 QGeoRoutingManagerEngine *QGeoServiceProviderFactoryMapbox::createRoutingManagerEngine(
     const QVariantMap &parameters, QGeoServiceProvider::Error *error, QString *errorString) const
 {
-    Q_UNUSED(parameters)
-    Q_UNUSED(error)
-    Q_UNUSED(errorString)
+    const QString accessToken = parameters.value(QStringLiteral("mapbox.access_token")).toString();
 
-    return 0;
+    if (!accessToken.isEmpty()) {
+        return new QGeoRoutingManagerEngineMapbox(parameters, error, errorString);
+    } else {
+        *error = QGeoServiceProvider::MissingRequiredParameterError;
+        *errorString = msgAccessTokenParameter();
+        return 0;
+    }
 }
 
 QPlaceManagerEngine *QGeoServiceProviderFactoryMapbox::createPlaceManagerEngine(

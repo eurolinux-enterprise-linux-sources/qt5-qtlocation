@@ -52,24 +52,19 @@
 #include <QString>
 #include <QVariant>
 
-#include <QPluginLoader>
 #include <QDebug>
 #include <QStringList>
 #include <QCoreApplication>
 #include <QObject>
 #include <QMetaObject>
 #include <QMetaEnum>
-#include <QProcess>
-#include <QEventLoop>
 #include <QtCore/private/qfactoryloader_p.h>
 
 QT_BEGIN_NAMESPACE
 
-#ifndef QT_NO_LIBRARY
 Q_GLOBAL_STATIC_WITH_ARGS(QFactoryLoader, loader,
         ("org.qt-project.qt.geoservice.serviceproviderfactory/5.0",
          QLatin1String("/geoservices")))
-#endif
 
 /*!
     \class QGeoServiceProvider
@@ -104,6 +99,7 @@ Q_GLOBAL_STATIC_WITH_ARGS(QFactoryLoader, loader,
         \li "mapbox" -> \l {Qt Location Mapbox Plugin}{Mapbox service}
         \li "here" -> \l {Qt Location HERE Plugin}{HERE Services}
         \li "osm" -> \l {Qt Location Open Street Map Plugin}{OpenStreetMap Services}
+        \li "esri" -> \l {Qt Location Esri Plugin}{ESRI Services}
     \endlist
 
     Each service provider must follow a naming convention for their service specific
@@ -625,21 +621,20 @@ void QGeoServiceProviderPrivate::unload()
 /* Filter out any parameter that doesn't match any plugin */
 void QGeoServiceProviderPrivate::filterParameterMap()
 {
-    const QList<QString> availablePlugins =
-            QGeoServiceProviderPrivate::plugins().keys();
+    const auto availablePlugins = QGeoServiceProviderPrivate::plugins();
 
     cleanedParameterMap = parameterMap;
-    foreach (const QString& name, availablePlugins) {
-        if (name == providerName) // don't remove parameters for current provider
+    for (auto it = availablePlugins.keyBegin(), end = availablePlugins.keyEnd(); it != end; ++it) {
+        if (*it == providerName) // don't remove parameters for current provider
             continue;
 
         QVariantMap::iterator i = cleanedParameterMap.begin();
         while (i != cleanedParameterMap.end()) {
             // remove every parameter meant for other plugins
-            if (i.key().startsWith(QString(name + QLatin1Char('.'))))
+            if (i.key().startsWith(QString(*it + QLatin1Char('.'))))
                 i = cleanedParameterMap.erase(i);
             else
-                i++;
+                ++i;
         }
     }
 }

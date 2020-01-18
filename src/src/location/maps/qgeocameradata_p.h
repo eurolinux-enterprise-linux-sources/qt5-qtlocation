@@ -47,10 +47,8 @@
 // We mean it.
 //
 
-#include "qlocationglobal.h"
-#include "qgeocoordinate.h"
-
-#include <QtPositioning/private/qgeoprojection_p.h>
+#include <QtLocation/private/qlocationglobal_p.h>
+#include <QtPositioning/qgeocoordinate.h>
 
 #include <QMetaType>
 
@@ -60,7 +58,7 @@ QT_BEGIN_NAMESPACE
 
 class QGeoCameraDataPrivate;
 
-class Q_LOCATION_EXPORT QGeoCameraData
+class Q_LOCATION_PRIVATE_EXPORT QGeoCameraData
 {
 public:
     QGeoCameraData();
@@ -84,6 +82,11 @@ public:
     void setRoll(double roll);
     double roll() const;
 
+    void setFieldOfView(double fieldOfView);
+    double fieldOfView() const;
+
+    // Zoom level is intended to be relative to a tileSize of 256^2 pixels.
+    // E.g., a zoom level of 0 must result in a mapWidth of 256, and so on.
     void setZoomLevel(double zoomLevel);
     double zoomLevel() const;
 

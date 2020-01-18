@@ -212,14 +212,22 @@ void QGeoRouteReply::addRoutes(const QList<QGeoRoute> &routes)
 }
 
 /*!
+    \fn void QGeoRouteReply::aborted()
+    \since 5.9
+
+    This signal is emitted when the operation has been cancelled.
+
+    \sa abort()
+*/
+
+/*!
     Cancels the operation immediately.
 
     This will do nothing if the reply is finished.
 */
 void QGeoRouteReply::abort()
 {
-    if (!isFinished())
-        setFinished(true);
+    emit aborted();
 }
 
 /*!
@@ -265,7 +273,5 @@ QGeoRouteReplyPrivate::QGeoRouteReplyPrivate(QGeoRouteReply::Error error, QStrin
       isFinished(true) {}
 
 QGeoRouteReplyPrivate::~QGeoRouteReplyPrivate() {}
-
-#include "moc_qgeoroutereply.cpp"
 
 QT_END_NAMESPACE

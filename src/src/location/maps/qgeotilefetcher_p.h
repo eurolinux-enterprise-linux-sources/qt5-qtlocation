@@ -49,7 +49,7 @@
 //
 
 #include <QObject>
-#include <qlocationglobal.h>
+#include <QtLocation/private/qlocationglobal_p.h>
 #include "qgeomaptype_p.h"
 #include "qgeotiledmappingmanagerengine_p.h"
 
@@ -62,12 +62,13 @@ class QGeoTiledMappingManagerEngine;
 class QGeoTiledMapReply;
 class QGeoTileSpec;
 
-class Q_LOCATION_EXPORT QGeoTileFetcher : public QObject
+class Q_LOCATION_PRIVATE_EXPORT QGeoTileFetcher : public QObject
 {
     Q_OBJECT
+    Q_DECLARE_PRIVATE(QGeoTileFetcher)
 
 public:
-    QGeoTileFetcher(QObject *parent = 0);
+    QGeoTileFetcher(QGeoMappingManagerEngine *parent);
     virtual ~QGeoTileFetcher();
 
 public Q_SLOTS:
@@ -83,19 +84,18 @@ Q_SIGNALS:
     void tileError(const QGeoTileSpec &spec, const QString &errorString);
 
 protected:
+    QGeoTileFetcher(QGeoTileFetcherPrivate &dd, QGeoMappingManagerEngine *parent);
+
     void timerEvent(QTimerEvent *event);
-    QGeoTiledMappingManagerEngine::CacheAreas cacheHint() const;
+    QAbstractGeoTileCache::CacheAreas cacheHint() const;
     virtual bool initialized() const;
 
 private:
-    QGeoTileFetcherPrivate *d_ptr;
 
     virtual QGeoTiledMapReply *getTileImage(const QGeoTileSpec &spec) = 0;
-    void handleReply(QGeoTiledMapReply *reply, const QGeoTileSpec &spec);
+    virtual void handleReply(QGeoTiledMapReply *reply, const QGeoTileSpec &spec);
 
-    Q_DECLARE_PRIVATE(QGeoTileFetcher)
     Q_DISABLE_COPY(QGeoTileFetcher)
-
     friend class QGeoTiledMappingManagerEngine;
 };
 

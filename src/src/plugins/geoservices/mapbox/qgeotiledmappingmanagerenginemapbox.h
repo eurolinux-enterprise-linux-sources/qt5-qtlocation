@@ -53,6 +53,9 @@ public:
     ~QGeoTiledMappingManagerEngineMapbox();
 
     QGeoMap *createMap();
+
+private:
+    QString m_cacheDirectory;
 };
 
 QT_END_NAMESPACE

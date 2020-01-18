@@ -1,31 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -275,7 +270,6 @@ Item {
     Map {
         id: map;
         x: 20; y: 20; width: 200; height: 200
-        zoomLevel: 3
         center: mapDefaultCenter
         plugin: testPlugin;
     }
@@ -284,7 +278,7 @@ Item {
 
     TestCase {
         name: "MapItemDetails"
-        when: windowShown
+        when: windowShown && map.mapReady
 
     /*
 
@@ -320,6 +314,7 @@ Item {
         function init()
         {
             map.clearMapItems()
+            map.zoomLevel = 3
             extMapPolygon.border.width = 1.0
             extMapPolygonClicked.clear()
             extMapPolylineColorChanged.clear()
@@ -426,6 +421,8 @@ Item {
         function test_dateline() {
             map.center = datelineCoordinate
             map.zoomLevel = 2.2
+            var inspectionTime = 0 // change this to inspect the behavior.
+
             // rectangle
             // item spanning across dateline
             map.addMapItem(extMapRectDateline)
@@ -442,9 +439,10 @@ Item {
             // move item edge onto dateline
             extMapRectDateline.topLeft.longitude = datelineCoordinate.longitude
             point = map.fromCoordinate(extMapRectDateline.topLeft)
-            verify(point.x == map.width / 2.0)
+            compare(point.x, map.width / 2.0)
             // drag item back onto dateline
             verify(LocationTestHelper.waitForPolished(map))
+            visualInspectionPoint(inspectionTime)
             mousePress(map, point.x + 5, point.y + 5)
             var i
             for (i=0; i < 20; i += 2) {
@@ -453,6 +451,7 @@ Item {
             }
             mouseRelease(map, point.x + 5 - i, point.y + 5)
             verify(LocationTestHelper.waitForPolished(map))
+            visualInspectionPoint(inspectionTime)
             point = map.fromCoordinate(extMapRectDateline.topLeft)
             verify(point.x < map.width / 2.0)
             point = map.fromCoordinate(extMapRectDateline.bottomRight)
@@ -464,13 +463,13 @@ Item {
             verify(extMapCircleDateline.center.longitude === 180)
             map.center = datelineCoordinate
             point = map.fromCoordinate(extMapCircleDateline.center)
-            verify(point.x == map.width / 2.0) // center of the screen
+            compare(point.x, map.width / 2.0) // center of the screen
             visualInspectionPoint()
             extMapCircleDateline.center.longitude = datelineCoordinateRight.longitude // -170, moving the circle to the right
             point = map.fromCoordinate(extMapCircleDateline.center)
             verify(LocationTestHelper.waitForPolished(map))
             verify(point.x > map.width / 2.0)
-            visualInspectionPoint()
+            visualInspectionPoint(inspectionTime)
             mousePress(map, point.x, point.y)
             for (i=0; i < 50; i += 4) {
                 wait(1)
@@ -478,6 +477,7 @@ Item {
             }
             mouseRelease(map, point.x - i, point.y)
             verify(LocationTestHelper.waitForPolished(map))
+            visualInspectionPoint(inspectionTime)
             point = map.fromCoordinate(extMapCircleDateline.center)
             visualInspectionPoint()
             verify(point.x < map.width / 2.0)
@@ -494,7 +494,7 @@ Item {
             point = map.fromCoordinate(extMapQuickItemDateline.coordinate)
             verify(point.x > map.width / 2.0)
             verify(LocationTestHelper.waitForPolished(map))
-            visualInspectionPoint()
+            visualInspectionPoint(inspectionTime)
             mousePress(map, point.x + 5, point.y + 5)
             for (i=0; i < 64; i += 5) {
                 wait(1)
@@ -502,6 +502,7 @@ Item {
             }
             mouseRelease(map, point.x + 5 - i, point.y + 5)
             verify(LocationTestHelper.waitForPolished(map))
+            visualInspectionPoint(inspectionTime)
             point = map.fromCoordinate(extMapQuickItemDateline.coordinate)
             visualInspectionPoint()
             verify(point.x < map.width / 2.0)
@@ -532,13 +533,14 @@ Item {
             path[0].longitude = datelineCoordinate.longitude;
             extMapPolygonDateline.path = path;
             point = map.fromCoordinate(extMapPolygonDateline.path[0])
-            verify(point.x == map.width / 2.0)
+            compare(point.x, map.width / 2.0)
             path = extMapPolygonDateline.path;
             path[3].longitude = datelineCoordinate.longitude;
             extMapPolygonDateline.path = path;
             point = map.fromCoordinate(extMapPolygonDateline.path[3])
-            verify(point.x == map.width / 2.0)
+            compare(point.x, map.width / 2.0)
             verify(LocationTestHelper.waitForPolished(map))
+            visualInspectionPoint(inspectionTime)
             mousePress(map, point.x + 5, point.y - 5)
             for (i=0; i < 16; i += 2) {
                 wait(1)
@@ -546,6 +548,7 @@ Item {
             }
             mouseRelease(map, point.x + 5 - i, point.y - 5)
             verify(LocationTestHelper.waitForPolished(map))
+            visualInspectionPoint(inspectionTime)
             point = map.fromCoordinate(extMapPolygonDateline.path[0])
             verify(point.x < map.width / 2.0)
             point = map.fromCoordinate(extMapPolygonDateline.path[1])
@@ -572,7 +575,7 @@ Item {
             path[0].longitude = datelineCoordinate.longitude;
             extMapPolylineDateline.path = path;
             point = map.fromCoordinate(extMapPolylineDateline.path[0])
-            verify(point.x == map.width / 2.0)
+            compare(point.x, map.width / 2.0)
             map.removeMapItem(extMapPolylineDateline)
 
             // map route
@@ -585,157 +588,6 @@ Item {
             point = map.fromCoordinate(extMapRouteDateline.route.path[1])
             verify(point.x > map.width / 2.0)
             map.removeMapItem(extMapRouteDateline)
-        }
-
-    /*
-
-     (0,0)   ---------------------------------------------------- (600,0)
-             | no map                                           |
-             |    (20,20)                                       |
-     (0,20)  |    ------------------------------------------    | (600,20)
-             |    |                                        |    |
-             |    |  map                                   |    |
-             |    |                                        |    |
-             |    |                                        |    |
-             |    |                                        |    |
-             |    |                   (lat 20, lon 180)    |    |
-             |    |                     x                  |    |
-             |    |                                        |    |
-             |    |                                        |    |
-             |    |                                        |    |
-             |    |                                        |    |
-             |    |                                        |    |
-             |    ------------------------------------------    |
-             |                                                  |
-     (0,240) ---------------------------------------------------- (600,240)
-
-     */
-        function test_border_drag() {
-            map.center = datelineCoordinate
-
-            // lower zoom level and change widths to reveal map border.
-            // Note: items are not visible at zoom level < 2.0,
-            // but for testing it's ok
-            map.zoomLevel = 1
-            page.width = 600
-            map.width = 560
-            // rectangle
-            map.addMapItem(extMapRectEdge)
-            verify(LocationTestHelper.waitForPolished(map))
-            verify(extMapRectEdge.topLeft.longitude == -15)
-            verify(extMapRectEdge.bottomRight.longitude == -5)
-            var point = map.fromCoordinate(extMapRectEdge.topLeft)
-            verify(point.x < map.width)
-            verify(point.x > map.width / 2.0)
-            point = map.fromCoordinate(extMapRectEdge.bottomRight)
-            verify(point.x < map.width)
-            verify(point.x > map.width / 2.0)
-            var originalWidth = extMapRectEdge.width;
-            verify(originalWidth < map.width / 2.0)
-            // drag item onto map border
-            point = map.fromCoordinate(extMapRectEdge.topLeft)
-            mousePress(map, point.x + 5, point.y + 5)
-            var i
-            for (i=0; i < 20; i += 2) {
-                wait(1)
-                mouseMove(map, point.x + 5 + i, point.y + 5)
-            }
-            mouseRelease(map, point.x + 5 + i, point.y + 5)
-            verify(LocationTestHelper.waitForPolished(map))
-            // currently the bottom right screen point is unwrapped and drawn
-            // out of the map border, but in the future culling may take place
-            // so tests for points outside the map border are ignored,
-            // instead we check the item width
-            point = map.fromCoordinate(extMapRectEdge.topLeft)
-            verify(point.x < map.width)
-            verify(point.x > map.width / 2.0)
-            compare(extMapRectEdge.width, originalWidth)
-            map.removeMapItem(extMapRectEdge)
-
-            // circle
-            map.addMapItem(extMapCircleEdge)
-            map.center = datelineCoordinate
-            verify(LocationTestHelper.waitForPolished(map))
-            verify(extMapCircleEdge.center.longitude == -15)
-            var point = map.fromCoordinate(extMapCircleEdge.center)
-            verify(point.x < map.width)
-            verify(point.x > map.width / 2.0)
-            originalWidth = extMapCircleEdge.width;
-            verify(originalWidth < map.width / 2.0)
-            point = map.fromCoordinate(extMapCircleEdge.center)
-            mousePress(map, point.x, point.y)
-            for (i=0; i < 20; i += 2) {
-                wait(1)
-                mouseMove(map, point.x + i, point.y)
-            }
-            mouseRelease(map, point.x + i, point.y)
-            verify(LocationTestHelper.waitForPolished(map))
-            point = map.fromCoordinate(extMapCircleEdge.center)
-            verify(point.x < map.width)
-            verify(point.x > map.width / 2.0)
-            fuzzy_compare(extMapCircleEdge.width, originalWidth)
-            map.removeMapItem(extMapCircleEdge)
-
-            // quickitem
-            map.addMapItem(extMapQuickItemEdge)
-            map.center = datelineCoordinate
-            verify(LocationTestHelper.waitForPolished(map))
-            verify(extMapQuickItemEdge.coordinate.longitude == -15)
-            point = map.fromCoordinate(extMapQuickItemEdge.coordinate)
-            verify(point.x < map.width)
-            verify(point.x > map.width / 2.0)
-            originalWidth = extMapQuickItemEdge.width;
-            verify(originalWidth < map.width / 2.0)
-            mousePress(map, point.x + 5, point.y + 5)
-            for (i=0; i < 20; i += 2) {
-                wait(1)
-                mouseMove(map, point.x + 5 + i, point.y + 5)
-            }
-            mouseRelease(map, point.x + 5 + i, point.y + 5)
-            verify(LocationTestHelper.waitForPolished(map))
-            point = map.fromCoordinate(extMapQuickItemEdge.coordinate)
-            verify(point.x < map.width)
-            verify(point.x > map.width / 2.0)
-            compare(extMapQuickItemEdge.width, originalWidth)
-            map.removeMapItem(extMapQuickItemEdge)
-
-            // polygon
-            map.center = datelineCoordinate
-            map.addMapItem(extMapPolygonEdge)
-            verify(LocationTestHelper.waitForPolished(map))
-            verify(extMapPolygonEdge.path[0].longitude == -15)
-            verify(extMapPolygonEdge.path[1].longitude == -5)
-            verify(extMapPolygonEdge.path[2].longitude == -5)
-            verify(extMapPolygonEdge.path[3].longitude == -15)
-            point = map.fromCoordinate(extMapPolygonEdge.path[0])
-            verify(point.x < map.width)
-            verify(point.x > map.width / 2.0)
-            point = map.fromCoordinate(extMapPolygonEdge.path[1])
-            verify(point.x < map.width)
-            verify(point.x > map.width / 2.0)
-            point = map.fromCoordinate(extMapPolygonEdge.path[2])
-            verify(point.x < map.width)
-            verify(point.x > map.width / 2.0)
-            point = map.fromCoordinate(extMapPolygonEdge.path[3])
-            verify(point.x < map.width)
-            verify(point.x > map.width / 2.0)
-            originalWidth = extMapPolygonEdge.width;
-            verify(originalWidth < map.width / 2.0)
-            mousePress(map, point.x + 5, point.y - 5)
-            for (i=0; i < 20; i += 2) {
-                wait(1)
-                mouseMove(map, point.x + 5 + i, point.y - 5)
-            }
-            mouseRelease(map, point.x + 5 + i, point.y - 5)
-            verify(LocationTestHelper.waitForPolished(map))
-            point = map.fromCoordinate(extMapPolygonEdge.path[0])
-            verify(point.x < map.width)
-            verify(point.x > map.width / 2.0)
-            point = map.fromCoordinate(extMapPolygonEdge.path[3])
-            verify(point.x < map.width)
-            verify(point.x > map.width / 2.0)
-            compare(extMapPolygonEdge.width, originalWidth)
-            map.removeMapItem(extMapPolygonEdge)
         }
 
         function fuzzy_compare(val, ref, tol) {

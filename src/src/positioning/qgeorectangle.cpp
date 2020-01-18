@@ -1,31 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtPositioning module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -34,8 +40,11 @@
 #include "qgeorectangle.h"
 #include "qgeorectangle_p.h"
 
+#include "qwebmercator_p.h"
+#include "qdoublevector2d_p.h"
 #include "qgeocoordinate.h"
 #include "qnumeric.h"
+#include "qlocationutils_p.h"
 #include <QList>
 QT_BEGIN_NAMESPACE
 
@@ -434,16 +443,8 @@ void QGeoRectangle::setCenter(const QGeoCoordinate &center)
     double tlLon = center.longitude() - width / 2.0;
     double brLat = center.latitude() - height / 2.0;
     double brLon = center.longitude() + width / 2.0;
-
-    if (tlLon < -180.0)
-        tlLon += 360.0;
-    if (tlLon > 180.0)
-        tlLon -= 360.0;
-
-    if (brLon < -180.0)
-        brLon += 360.0;
-    if (brLon > 180.0)
-        brLon -= 360.0;
+    tlLon = QLocationUtils::wrapLong(tlLon);
+    brLon = QLocationUtils::wrapLong(brLon);
 
     if (tlLat > 90.0) {
         brLat = 2 * center.latitude() - 90.0;
@@ -509,18 +510,10 @@ void QGeoRectangle::setWidth(double degreesWidth)
     QGeoCoordinate c = center();
 
     double tlLon = c.longitude() - degreesWidth / 2.0;
-
-    if (tlLon < -180.0)
-        tlLon += 360.0;
-    if (tlLon > 180.0)
-        tlLon -= 360.0;
+    tlLon = QLocationUtils::wrapLong(tlLon);
 
     double brLon = c.longitude() + degreesWidth / 2.0;
-
-    if (brLon < -180.0)
-        brLon += 360.0;
-    if (brLon > 180.0)
-        brLon -= 360.0;
+    brLon = QLocationUtils::wrapLong(brLon);
 
     d->topLeft = QGeoCoordinate(tlLat, tlLon);
     d->bottomRight = QGeoCoordinate(brLat, brLon);
@@ -608,10 +601,7 @@ double QGeoRectangle::height() const
 
     Q_D(const QGeoRectangle);
 
-    double result = d->topLeft.latitude() - d->bottomRight.latitude();
-    if (result < 0.0)
-        result = qQNaN();
-    return result;
+    return d->topLeft.latitude() - d->bottomRight.latitude();
 }
 
 bool QGeoRectanglePrivate::contains(const QGeoCoordinate &coordinate) const
@@ -660,12 +650,13 @@ QGeoCoordinate QGeoRectanglePrivate::center() const
     if (topLeft.longitude() > bottomRight.longitude())
         cLon = cLon - 180.0;
 
-    if (cLon < -180.0)
-        cLon += 360.0;
-    if (cLon > 180.0)
-        cLon -= 360.0;
-
+    cLon = QLocationUtils::wrapLong(cLon);
     return QGeoCoordinate(cLat, cLon);
+}
+
+QGeoRectangle QGeoRectanglePrivate::boundingGeoRectangle() const
+{
+    return QGeoRectangle(topLeft, bottomRight);
 }
 
 /*!
@@ -757,37 +748,18 @@ void QGeoRectangle::translate(double degreesLatitude, double degreesLongitude)
     double brLat = d->bottomRight.latitude();
     double brLon = d->bottomRight.longitude();
 
-    if ((tlLat != 90.0) || (brLat != -90.0)) {
-        tlLat += degreesLatitude;
-        brLat += degreesLatitude;
-    }
+    if (degreesLatitude >= 0.0)
+        degreesLatitude = qMin(degreesLatitude, 90.0 - tlLat);
+    else
+        degreesLatitude = qMax(degreesLatitude, -90.0 - brLat);
 
     if ( (tlLon != -180.0) || (brLon != 180.0) ) {
-        tlLon += degreesLongitude;
-        brLon += degreesLongitude;
+        tlLon = QLocationUtils::wrapLong(tlLon + degreesLongitude);
+        brLon = QLocationUtils::wrapLong(brLon + degreesLongitude);
     }
 
-    if (tlLon < -180.0)
-        tlLon += 360.0;
-    if (tlLon > 180.0)
-        tlLon -= 360.0;
-
-    if (brLon < -180.0)
-        brLon += 360.0;
-    if (brLon > 180.0)
-        brLon -= 360.0;
-
-    if (tlLat > 90.0)
-        tlLat = 90.0;
-
-    if (tlLat < -90.0)
-        tlLat = -90.0;
-
-    if (brLat > 90.0)
-        brLat = 90.0;
-
-    if (brLat < -90.0)
-        brLat = -90.0;
+    tlLat += degreesLatitude;
+    brLat += degreesLatitude;
 
     d->topLeft = QGeoCoordinate(tlLat, tlLon);
     d->bottomRight = QGeoCoordinate(brLat, brLon);
@@ -807,6 +779,17 @@ QGeoRectangle QGeoRectangle::translated(double degreesLatitude, double degreesLo
     QGeoRectangle result(*this);
     result.translate(degreesLatitude, degreesLongitude);
     return result;
+}
+
+/*!
+    Extends the geo rectangle to also cover the coordinate \a coordinate
+
+    \since 5.9
+*/
+void QGeoRectangle::extendRectangle(const QGeoCoordinate &coordinate)
+{
+    Q_D(QGeoRectangle);
+    d->extendShape(coordinate);
 }
 
 /*!

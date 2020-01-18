@@ -84,10 +84,36 @@ static bool parseArgs(QStringList& args, QVariantMap& parameters)
 
 int main(int argc, char *argv[])
 {
+#if QT_CONFIG(library)
+    const QByteArray additionalLibraryPaths = qgetenv("QTLOCATION_EXTRA_LIBRARY_PATH");
+    for (const QByteArray &p : additionalLibraryPaths.split(':'))
+        QCoreApplication::addLibraryPath(QString(p));
+#endif
+    QGuiApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
     QGuiApplication application(argc, argv);
 
     QVariantMap parameters;
     QStringList args(QCoreApplication::arguments());
+
+    // Fetch tokens from the environment, if present
+    const QByteArray mapboxMapID = qgetenv("MAPBOX_MAP_ID");
+    const QByteArray mapboxAccessToken = qgetenv("MAPBOX_ACCESS_TOKEN");
+    const QByteArray hereAppID = qgetenv("HERE_APP_ID");
+    const QByteArray hereToken = qgetenv("HERE_TOKEN");
+    const QByteArray esriToken = qgetenv("ESRI_TOKEN");
+
+    if (!mapboxMapID.isEmpty())
+        parameters["mapbox.map_id"] = QString::fromLocal8Bit(mapboxMapID);
+    if (!mapboxAccessToken.isEmpty()) {
+        parameters["mapbox.access_token"] = QString::fromLocal8Bit(mapboxAccessToken);
+        parameters["mapboxgl.access_token"] = QString::fromLocal8Bit(mapboxAccessToken);
+    }
+    if (!hereAppID.isEmpty())
+        parameters["here.app_id"] = QString::fromLocal8Bit(hereAppID);
+    if (!hereToken.isEmpty())
+        parameters["here.token"] = QString::fromLocal8Bit(hereToken);
+    if (!esriToken.isEmpty())
+        parameters["esri.token"] = QString::fromLocal8Bit(esriToken);
 
     if (parseArgs(args, parameters))
         return 0;

@@ -47,7 +47,7 @@
 // We mean it.
 //
 
-#include <QtLocation/qlocationglobal.h>
+#include <QtLocation/private/qlocationglobal_p.h>
 #include <QtCore/QScopedPointer>
 
 QT_BEGIN_NAMESPACE
@@ -58,26 +58,22 @@ class QGeoMapType;
 class QGeoCameraTilesPrivate;
 class QSize;
 
-class Q_LOCATION_EXPORT QGeoCameraTiles {
+class Q_LOCATION_PRIVATE_EXPORT QGeoCameraTiles {
 public:
     QGeoCameraTiles();
     ~QGeoCameraTiles();
 
-    enum PrefetchStle { PrefetchNeighbourLayer, PrefetchTwoNeighbourLayers};
-
     void setCameraData(const QGeoCameraData &camera);
+    QGeoCameraData cameraData() const;
     void setScreenSize(const QSize &size);
     void setTileSize(int tileSize);
-    void setMaximumZoomLevel(int maxZoom);
-
     int tileSize() const;
-
+    void setViewExpansion(double viewExpansion);
     void setPluginString(const QString &pluginString);
     void setMapType(const QGeoMapType &mapType);
+    QGeoMapType activeMapType() const;
     void setMapVersion(int mapVersion);
-
-    const QSet<QGeoTileSpec>& visibleTiles();
-    QSet<QGeoTileSpec> prefetchTiles(PrefetchStle style);
+    const QSet<QGeoTileSpec>& createTiles();
 
 protected:
     QScopedPointer<QGeoCameraTilesPrivate> d_ptr;

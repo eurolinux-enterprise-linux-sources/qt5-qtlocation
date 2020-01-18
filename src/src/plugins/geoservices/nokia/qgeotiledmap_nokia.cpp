@@ -36,7 +36,6 @@
 
 #include "qgeotiledmap_nokia.h"
 #include "qgeotiledmappingmanagerengine_nokia.h"
-#include "qgeomapcontroller_p.h"
 
 #include <QDebug>
 #include <QObject>
@@ -56,7 +55,7 @@ QT_BEGIN_NAMESPACE
  */
 QGeoTiledMapNokia::QGeoTiledMapNokia(QGeoTiledMappingManagerEngineNokia *engine, QObject *parent /*= 0*/) :
     QGeoTiledMap(engine, parent),
-    m_logo(":/images/logo.png"), // HERE logo image
+    m_logo(":/nokia/logo.png"), // HERE logo image
     m_engine(engine)
 {}
 
@@ -71,15 +70,15 @@ void QGeoTiledMapNokia::evaluateCopyrights(const QSet<QGeoTileSpec> &visibleTile
     if (m_engine.isNull())
         return;
 
-    const QString copyrightsString = m_engine->evaluateCopyrightsText(activeMapType(), mapController()->zoom(), visibleTiles);
+    const QString copyrightsString = m_engine->evaluateCopyrightsText(activeMapType(), cameraData().zoomLevel(), visibleTiles);
 
-    if (width() > 0 && height() > 0 && ((copyrightsString.isNull() && m_copyrightsSlab.isNull()) || copyrightsString != m_lastCopyrightsString)) {
+    if (viewportWidth() > 0 && viewportHeight() > 0 && ((copyrightsString.isNull() && m_copyrightsSlab.isNull()) || copyrightsString != m_lastCopyrightsString)) {
         QFont font("Sans Serif");
         font.setPixelSize(fontSize);
         font.setStyleHint(QFont::SansSerif);
         font.setWeight(QFont::Bold);
 
-        QRect textBounds = QFontMetrics(font).boundingRect(0, 0, width(), height(), Qt::AlignBottom | Qt::AlignLeft | Qt::TextWordWrap, copyrightsString);
+        QRect textBounds = QFontMetrics(font).boundingRect(0, 0, viewportWidth(), viewportHeight(), Qt::AlignBottom | Qt::AlignLeft | Qt::TextWordWrap, copyrightsString);
 
         m_copyrightsSlab = QImage(m_logo.width() + textBounds.width() + spaceToLogo + blurRate * 2,
                                 qMax(m_logo.height(), textBounds.height() + blurRate * 2),

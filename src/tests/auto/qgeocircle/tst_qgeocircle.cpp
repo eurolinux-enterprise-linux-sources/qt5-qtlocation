@@ -1,31 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -65,8 +60,11 @@ private slots:
     void contains_data();
     void contains();
 
-    void extendShape();
-    void extendShape_data();
+    void boundingGeoRectangle_data();
+    void boundingGeoRectangle();
+
+    void extendCircle();
+    void extendCircle_data();
 
     void areaComparison();
     void areaComparison_data();
@@ -248,7 +246,7 @@ void tst_QGeoCircle::valid()
     QCOMPARE(c.isValid(), valid);
 
     QGeoShape area = c;
-    QCOMPARE(c.isValid(), valid);
+    QCOMPARE(area.isValid(), valid);
 }
 
 void tst_QGeoCircle::empty_data()
@@ -286,7 +284,7 @@ void tst_QGeoCircle::contains_data()
     QTest::addColumn<QGeoCoordinate>("probe");
     QTest::addColumn<bool>("result");
 
-    QTest::newRow("own centre") << QGeoCoordinate(1,1) << qreal(100.0) <<
+    QTest::newRow("own center") << QGeoCoordinate(1,1) << qreal(100.0) <<
                                    QGeoCoordinate(1,1) << true;
     QTest::newRow("over the hills") << QGeoCoordinate(1,1) << qreal(100.0) <<
                                        QGeoCoordinate(30, 40) << false;
@@ -296,6 +294,7 @@ void tst_QGeoCircle::contains_data()
                                        QGeoCoordinate(1.00077538, 0.99955527) << true;
     QTest::newRow("at 1.01*radius") << QGeoCoordinate(1,1) << qreal(100.0) <<
                                        QGeoCoordinate(1.00071413, 0.99943423) << false;
+    // TODO: add tests for edge circle cases: cross 1 pole, cross both poles
 }
 
 void tst_QGeoCircle::contains()
@@ -312,7 +311,39 @@ void tst_QGeoCircle::contains()
     QCOMPARE(area.contains(probe), result);
 }
 
-void tst_QGeoCircle::extendShape()
+void tst_QGeoCircle::boundingGeoRectangle_data()
+{
+    QTest::addColumn<QGeoCoordinate>("center");
+    QTest::addColumn<qreal>("radius");
+    QTest::addColumn<QGeoCoordinate>("probe");
+    QTest::addColumn<bool>("result");
+
+    QTest::newRow("own center") << QGeoCoordinate(1,1) << qreal(100.0) <<
+                                   QGeoCoordinate(1,1) << true;
+    QTest::newRow("over the hills") << QGeoCoordinate(1,1) << qreal(100.0) <<
+                                       QGeoCoordinate(30, 40) << false;
+    QTest::newRow("at 0.5*radius") << QGeoCoordinate(1,1) << qreal(100.0) <<
+                                      QGeoCoordinate(1.00015374,1.00015274) << true;
+    QTest::newRow("at 0.99*radius") << QGeoCoordinate(1,1) << qreal(100.0) <<
+                                       QGeoCoordinate(1.00077538, 0.99955527) << true;
+    QTest::newRow("Outside the box") << QGeoCoordinate(1,1) << qreal(100.0) <<
+                                       QGeoCoordinate(1.00071413, 0.99903423) << false;
+    // TODO: add tests for edge circle cases: cross 1 pole, cross both poles
+}
+
+void tst_QGeoCircle::boundingGeoRectangle()
+{
+    QFETCH(QGeoCoordinate, center);
+    QFETCH(qreal, radius);
+    QFETCH(QGeoCoordinate, probe);
+    QFETCH(bool, result);
+
+    QGeoCircle c(center, radius);
+    QGeoRectangle box = c.boundingGeoRectangle();
+    QCOMPARE(box.contains(probe), result);
+}
+
+void tst_QGeoCircle::extendCircle()
 {
     QFETCH(QGeoCircle, circle);
     QFETCH(QGeoCoordinate, coord);
@@ -320,12 +351,12 @@ void tst_QGeoCircle::extendShape()
     QFETCH(bool, containsExtended);
 
     QCOMPARE(circle.contains(coord), containsFirst);
-    circle.extendShape(coord);
+    circle.extendCircle(coord);
     QCOMPARE(circle.contains(coord), containsExtended);
 
 }
 
-void tst_QGeoCircle::extendShape_data()
+void tst_QGeoCircle::extendCircle_data()
 {
     QTest::addColumn<QGeoCircle>("circle");
     QTest::addColumn<QGeoCoordinate>("coord");

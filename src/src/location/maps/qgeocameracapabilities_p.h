@@ -50,13 +50,13 @@
 
 #include <QSharedDataPointer>
 
-#include <QtLocation/qlocationglobal.h>
+#include <QtLocation/private/qlocationglobal_p.h>
 
 QT_BEGIN_NAMESPACE
 
 class QGeoCameraCapabilitiesPrivate;
 
-class Q_LOCATION_EXPORT QGeoCameraCapabilities
+class Q_LOCATION_PRIVATE_EXPORT QGeoCameraCapabilities
 {
 public:
     QGeoCameraCapabilities();
@@ -65,11 +65,19 @@ public:
 
     QGeoCameraCapabilities &operator = (const QGeoCameraCapabilities &other);
 
+    bool operator == (const QGeoCameraCapabilities &other) const;
+    bool operator != (const QGeoCameraCapabilities &other) const;
+
+    void setTileSize(int tileSize);
+    int tileSize() const;
+
     void setMinimumZoomLevel(double minimumZoomLevel);
     double minimumZoomLevel() const;
+    double minimumZoomLevelAt256() const;
 
     void setMaximumZoomLevel(double maximumZoomLevel);
     double maximumZoomLevel() const;
+    double maximumZoomLevelAt256() const;
 
     void setSupportsBearing(bool supportsBearing);
     bool supportsBearing() const;
@@ -85,6 +93,15 @@ public:
 
     void setMaximumTilt(double maximumTilt);
     double maximumTilt() const;
+
+    void setMinimumFieldOfView(double minimumFieldOfView);
+    double minimumFieldOfView() const;
+
+    void setMaximumFieldOfView(double maximumFieldOfView);
+    double maximumFieldOfView() const;
+
+    void setOverzoomEnabled(bool overzoomEnabled);
+    bool overzoomEnabled() const;
 
     bool isValid() const;
 

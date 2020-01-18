@@ -1,31 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtPositioning module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -39,25 +45,11 @@
 #include <QDataStream>
 #include <QDebug>
 #include <qnumeric.h>
-
-#include <math.h>
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include <qmath.h>
 
 QT_BEGIN_NAMESPACE
 
 static const double qgeocoordinate_EARTH_MEAN_RADIUS = 6371.0072;
-
-inline static double qgeocoordinate_degToRad(double deg)
-{
-    return deg * M_PI / 180;
-}
-inline static double qgeocoordinate_radToDeg(double rad)
-{
-    return rad * 180 / M_PI;
-}
 
 
 QGeoCoordinatePrivate::QGeoCoordinatePrivate():
@@ -424,15 +416,15 @@ qreal QGeoCoordinate::distanceTo(const QGeoCoordinate &other) const
     }
 
     // Haversine formula
-    double dlat = qgeocoordinate_degToRad(other.d->lat - d->lat);
-    double dlon = qgeocoordinate_degToRad(other.d->lng - d->lng);
+    double dlat = qDegreesToRadians(other.d->lat - d->lat);
+    double dlon = qDegreesToRadians(other.d->lng - d->lng);
     double haversine_dlat = sin(dlat / 2.0);
     haversine_dlat *= haversine_dlat;
     double haversine_dlon = sin(dlon / 2.0);
     haversine_dlon *= haversine_dlon;
     double y = haversine_dlat
-             + cos(qgeocoordinate_degToRad(d->lat))
-             * cos(qgeocoordinate_degToRad(other.d->lat))
+             + cos(qDegreesToRadians(d->lat))
+             * cos(qDegreesToRadians(other.d->lat))
              * haversine_dlon;
     double x = 2 * asin(sqrt(y));
     return qreal(x * qgeocoordinate_EARTH_MEAN_RADIUS * 1000);
@@ -456,15 +448,16 @@ qreal QGeoCoordinate::azimuthTo(const QGeoCoordinate &other) const
         return 0;
     }
 
-    double dlon = qgeocoordinate_degToRad(other.d->lng - d->lng);
-    double lat1Rad = qgeocoordinate_degToRad(d->lat);
-    double lat2Rad = qgeocoordinate_degToRad(other.d->lat);
+    double dlon = qDegreesToRadians(other.d->lng - d->lng);
+    double lat1Rad = qDegreesToRadians(d->lat);
+    double lat2Rad = qDegreesToRadians(other.d->lat);
 
     double y = sin(dlon) * cos(lat2Rad);
     double x = cos(lat1Rad) * sin(lat2Rad) - sin(lat1Rad) * cos(lat2Rad) * cos(dlon);
 
+    double azimuth = qRadiansToDegrees(atan2(y, x)) + 360.0;
     double whole;
-    double fraction = modf(qgeocoordinate_radToDeg(atan2(y, x)), &whole);
+    double fraction = modf(azimuth, &whole);
     return qreal((int(whole + 360) % 360) + fraction);
 }
 
@@ -472,12 +465,12 @@ void QGeoCoordinatePrivate::atDistanceAndAzimuth(const QGeoCoordinate &coord,
                                                  qreal distance, qreal azimuth,
                                                  double *lon, double *lat)
 {
-    double latRad = qgeocoordinate_degToRad(coord.d->lat);
-    double lonRad = qgeocoordinate_degToRad(coord.d->lng);
+    double latRad = qDegreesToRadians(coord.d->lat);
+    double lonRad = qDegreesToRadians(coord.d->lng);
     double cosLatRad = cos(latRad);
     double sinLatRad = sin(latRad);
 
-    double azimuthRad = qgeocoordinate_degToRad(azimuth);
+    double azimuthRad = qDegreesToRadians(azimuth);
 
     double ratio = (distance / (qgeocoordinate_EARTH_MEAN_RADIUS * 1000.0));
     double cosRatio = cos(ratio);
@@ -488,8 +481,8 @@ void QGeoCoordinatePrivate::atDistanceAndAzimuth(const QGeoCoordinate &coord,
     double resultLonRad = lonRad + atan2(sin(azimuthRad) * sinRatio * cosLatRad,
                                    cosRatio - sinLatRad * sin(resultLatRad));
 
-    *lat = qgeocoordinate_radToDeg(resultLatRad);
-    *lon = qgeocoordinate_radToDeg(resultLonRad);
+    *lat = qRadiansToDegrees(resultLatRad);
+    *lon = qRadiansToDegrees(resultLonRad);
 }
 
 /*!
@@ -510,14 +503,8 @@ QGeoCoordinate QGeoCoordinate::atDistanceAndAzimuth(qreal distance, qreal azimut
     double resultLon, resultLat;
     QGeoCoordinatePrivate::atDistanceAndAzimuth(*this, distance, azimuth,
                                                 &resultLon, &resultLat);
-
-    if (resultLon > 180.0)
-        resultLon -= 360.0;
-    else if (resultLon < -180.0)
-        resultLon += 360.0;
-
     double resultAlt = d->alt + distanceUp;
-    return QGeoCoordinate(resultLat, resultLon, resultAlt);
+    return QGeoCoordinate(resultLat, QLocationUtils::wrapLong(resultLon), resultAlt);
 }
 
 /*!
@@ -693,6 +680,8 @@ QDebug operator<<(QDebug dbg, const QGeoCoordinate &coord)
     double lat = coord.latitude();
     double lng = coord.longitude();
 
+    QTextStreamManipulator tsm = qSetRealNumberPrecision(11);
+    dbg << tsm;
     dbg.nospace() << "QGeoCoordinate(";
     if (qIsNaN(lat))
         dbg << '?';
@@ -755,5 +744,22 @@ QDataStream &operator>>(QDataStream &stream, QGeoCoordinate &coordinate)
     return stream;
 }
 #endif
+
+/*! \fn uint qHash(const QGeoCoordinate &coordinate, uint seed = 0)
+    \relates QHash
+    \since Qt 5.7
+
+    Returns a hash value for \a coordinate, using \a seed to seed the calculation.
+*/
+uint qHash(const QGeoCoordinate &coordinate, uint seed)
+{
+    QtPrivate::QHashCombine hash;
+    // north and south pole are geographically equivalent (no matter the longitude)
+    if (coordinate.latitude() != 90.0 && coordinate.latitude() != -90.0)
+        seed = hash(seed, coordinate.longitude());
+    seed = hash(seed, coordinate.latitude());
+    seed = hash(seed, coordinate.altitude());
+    return seed;
+}
 
 QT_END_NAMESPACE

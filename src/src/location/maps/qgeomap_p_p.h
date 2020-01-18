@@ -47,9 +47,16 @@
 // We mean it.
 //
 
-#include "qgeocameradata_p.h"
-#include "qgeomaptype_p.h"
+#include <QtLocation/private/qlocationglobal_p.h>
+#include <QtLocation/private/qgeocameradata_p.h>
+#include <QtLocation/private/qgeomaptype_p.h>
+#include <QtLocation/private/qgeoprojection_p.h>
+#include <QtLocation/private/qgeomap_p.h>
+#include <QtLocation/private/qgeocameracapabilities_p.h>
 #include <QtCore/private/qobject_p.h>
+#include <QtCore/QSize>
+#include <QtCore/QList>
+#include "qgeomap_p.h"
 
 
 QT_BEGIN_NAMESPACE
@@ -57,30 +64,41 @@ QT_BEGIN_NAMESPACE
 class QGeoMappingManagerEngine;
 class QGeoMap;
 class QGeoMapController;
+class QGeoMapParameter;
+class QDeclarativeGeoMapItemBase;
 
-class QGeoMapPrivate :  public QObjectPrivate
+class Q_LOCATION_PRIVATE_EXPORT QGeoMapPrivate :  public QObjectPrivate
 {
     Q_DECLARE_PUBLIC(QGeoMap)
 public:
-    QGeoMapPrivate(QGeoMappingManagerEngine *engine);
+    QGeoMapPrivate(QGeoMappingManagerEngine *engine, QGeoProjection *geoProjection);
     virtual ~QGeoMapPrivate();
 
-    void setCameraData(const QGeoCameraData &cameraData);
-    void resize(int width, int height);
+    const QGeoProjection *geoProjection() const;
+    void setCameraCapabilities(const QGeoCameraCapabilities &cameraCapabilities);
+    const QGeoCameraCapabilities &cameraCapabilities() const;
+protected:
+    /* Hooks into the actual map implementations */
+    virtual void addParameter(QGeoMapParameter *param);
+    virtual void removeParameter(QGeoMapParameter *param);
+
+    virtual QGeoMap::ItemTypes supportedMapItemTypes() const;
+    virtual void addMapItem(QDeclarativeGeoMapItemBase *item);
+    virtual void removeMapItem(QDeclarativeGeoMapItemBase *item);
+
+    virtual void changeViewportSize(const QSize &size) = 0; // called by QGeoMap::setSize()
+    virtual void changeCameraData(const QGeoCameraData &oldCameraData) = 0; // called by QGeoMap::setCameraData()
+    virtual void changeActiveMapType(const QGeoMapType mapType) = 0; // called by QGeoMap::setActiveMapType()
 
 protected:
-    virtual void mapResized(int width, int height) = 0;
-    virtual void changeCameraData(const QGeoCameraData &oldCameraData) = 0;
-    virtual void changeActiveMapType(const QGeoMapType mapType) = 0;
-
-protected:
-    int m_width;
-    int m_height;
-    double m_aspectRatio;
+    QSize m_viewportSize;
+    QGeoProjection *m_geoProjection;
     QPointer<QGeoMappingManagerEngine> m_engine;
-    QGeoMapController *m_controller;
     QGeoCameraData m_cameraData;
     QGeoMapType m_activeMapType;
+    QList<QGeoMapParameter *> m_mapParameters;
+    QList<QDeclarativeGeoMapItemBase *> m_mapItems;
+    QGeoCameraCapabilities m_cameraCapabilities;
 };
 
 QT_END_NAMESPACE

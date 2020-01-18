@@ -47,7 +47,7 @@
 // We mean it.
 //
 
-#include <QtLocation/qlocationglobal.h>
+#include <QtLocation/private/qlocationglobal_p.h>
 
 #include <QObject>
 #include <QCache>
@@ -57,13 +57,13 @@
 #include <QTimer>
 
 #include "qgeotilespec_p.h"
-#include "qgeotiledmappingmanagerengine_p.h"
 
 #include <QImage>
 
 QT_BEGIN_NAMESPACE
 
 class QGeoMappingManager;
+class QGeoMappingManagerEngine;
 
 class QGeoTile;
 class QAbstractGeoTileCache;
@@ -71,7 +71,7 @@ class QAbstractGeoTileCache;
 class QThread;
 
 /* This is also used in the mapgeometry */
-class Q_LOCATION_EXPORT QGeoTileTexture
+class Q_LOCATION_PRIVATE_EXPORT QGeoTileTexture
 {
 public:
 
@@ -83,10 +83,22 @@ public:
     bool textureBound;
 };
 
-class Q_LOCATION_EXPORT QAbstractGeoTileCache : public QObject
+class Q_LOCATION_PRIVATE_EXPORT QAbstractGeoTileCache : public QObject
 {
     Q_OBJECT
 public:
+    enum CostStrategy {
+        Unitary,
+        ByteSize
+    };
+
+    enum CacheArea {
+        DiskCache = 0x01,
+        MemoryCache = 0x02,
+        AllCaches = 0xFF
+    };
+    Q_DECLARE_FLAGS(CacheAreas, CacheArea)
+
     virtual ~QAbstractGeoTileCache();
 
     virtual void setMaxDiskUsage(int diskUsage);
@@ -103,22 +115,33 @@ public:
     virtual int minTextureUsage() const = 0;
     virtual int textureUsage() const = 0;
     virtual void clearAll() = 0;
+    virtual void setCostStrategyDisk(CostStrategy costStrategy) = 0;
+    virtual CostStrategy costStrategyDisk() const = 0;
+    virtual void setCostStrategyMemory(CostStrategy costStrategy) = 0;
+    virtual CostStrategy costStrategyMemory() const = 0;
+    virtual void setCostStrategyTexture(CostStrategy costStrategy) = 0;
+    virtual CostStrategy costStrategyTexture() const = 0;
 
     virtual QSharedPointer<QGeoTileTexture> get(const QGeoTileSpec &spec) = 0;
 
     virtual void insert(const QGeoTileSpec &spec,
                 const QByteArray &bytes,
                 const QString &format,
-                QGeoTiledMappingManagerEngine::CacheAreas areas = QGeoTiledMappingManagerEngine::AllCaches) = 0;
+                QAbstractGeoTileCache::CacheAreas areas = QAbstractGeoTileCache::AllCaches) = 0;
     virtual void handleError(const QGeoTileSpec &spec, const QString &errorString);
+    virtual void init() = 0;
 
     static QString baseCacheDirectory();
+    static QString baseLocationCacheDirectory();
 
 protected:
     QAbstractGeoTileCache(QObject *parent = 0);
-
     virtual void printStats() = 0;
+
+    friend class QGeoTiledMappingManagerEngine;
 };
+
+Q_DECLARE_OPERATORS_FOR_FLAGS(QAbstractGeoTileCache::CacheAreas)
 
 QT_END_NAMESPACE
 

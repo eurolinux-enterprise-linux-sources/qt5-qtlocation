@@ -34,12 +34,13 @@
 **
 ****************************************************************************/
 
+#include <QtPositioning/private/qwebmercator_p.h>
 #include "qgeocameracapabilities_p.h"
 #include "qgeotiledmappingmanagerengine_nokia.h"
 #include "qgeotiledmap_nokia.h"
 #include "qgeotilefetcher_nokia.h"
 #include "qgeotilespec_p.h"
-#include "qgeofiletilecache_p.h"
+#include "qgeofiletilecachenokia.h"
 
 #include <QDebug>
 #include <QDir>
@@ -62,55 +63,85 @@ QGeoTiledMappingManagerEngineNokia::QGeoTiledMappingManagerEngineNokia(
     Q_UNUSED(error);
     Q_UNUSED(errorString);
 
+    int ppi = 72;
+    if (parameters.contains(QStringLiteral("here.mapping.highdpi_tiles"))) {
+        const QString param = parameters.value(QStringLiteral("here.mapping.highdpi_tiles")).toString().toLower();
+        if (param == "true")
+            ppi = 250;
+    }
+
     QGeoCameraCapabilities capabilities;
 
     capabilities.setMinimumZoomLevel(0.0);
     capabilities.setMaximumZoomLevel(20.0);
-
+    if (ppi > 72) {
+        // Zoom levels 0 and 20 are not supported for 512x512 tiles.
+        capabilities.setMinimumZoomLevel(1.0);
+        capabilities.setMaximumZoomLevel(19.0);
+    }
+    capabilities.setSupportsBearing(true);
+    capabilities.setSupportsTilting(true);
+    capabilities.setMinimumTilt(0);
+    capabilities.setMaximumTilt(80);
+    capabilities.setMinimumFieldOfView(20.0);
+    capabilities.setMaximumFieldOfView(120.0);
+    capabilities.setOverzoomEnabled(true);
     setCameraCapabilities(capabilities);
 
     setTileSize(QSize(256, 256));
 
+    const QByteArray pluginName = "here";
     QList<QGeoMapType> types;
-    types << QGeoMapType(QGeoMapType::StreetMap, tr("Street Map"), tr("Normal map view in daylight mode"), false, false, 1);
-    types << QGeoMapType(QGeoMapType::SatelliteMapDay, tr("Satellite Map"), tr("Satellite map view in daylight mode"), false, false, 2);
-    types << QGeoMapType(QGeoMapType::TerrainMap, tr("Terrain Map"), tr("Terrain map view in daylight mode"), false, false, 3);
-    types << QGeoMapType(QGeoMapType::HybridMap, tr("Hybrid Map"), tr("Satellite map view with streets in daylight mode"), false, false, 4);
-    types << QGeoMapType(QGeoMapType::TransitMap, tr("Transit Map"), tr("Color-reduced map view with public transport scheme in daylight mode"), false, false, 5);
-    types << QGeoMapType(QGeoMapType::GrayStreetMap, tr("Gray Street Map"), tr("Color-reduced map view in daylight mode"), false, false, 6);
-    types << QGeoMapType(QGeoMapType::StreetMap, tr("Mobile Street Map"), tr("Mobile normal map view in daylight mode"), true, false, 7);
-    types << QGeoMapType(QGeoMapType::TerrainMap, tr("Mobile Terrain Map"), tr("Mobile terrain map view in daylight mode"), true, false, 8);
-    types << QGeoMapType(QGeoMapType::HybridMap, tr("Mobile Hybrid Map"), tr("Mobile satellite map view with streets in daylight mode"), true, false, 9);
-    types << QGeoMapType(QGeoMapType::TransitMap, tr("Mobile Transit Map"), tr("Mobile color-reduced map view with public transport scheme in daylight mode"), true, false, 10);
-    types << QGeoMapType(QGeoMapType::GrayStreetMap, tr("Mobile Gray Street Map"), tr("Mobile color-reduced map view in daylight mode"), true, false, 11);
-    types << QGeoMapType(QGeoMapType::StreetMap, tr("Custom Street Map"), tr("Normal map view in daylight mode"), false, false, 12);
-    types << QGeoMapType(QGeoMapType::StreetMap, tr("Night Street Map"), tr("Normal map view in night mode"), false, true, 13);
-    types << QGeoMapType(QGeoMapType::StreetMap, tr("Mobile Night Street Map"), tr("Mobile normal map view in night mode"), true, true, 14);
-    types << QGeoMapType(QGeoMapType::GrayStreetMap, tr("Gray Night Street Map"), tr("Color-reduced map view in night mode (especially used for background maps)"), false, true, 15);
-    types << QGeoMapType(QGeoMapType::GrayStreetMap, tr("Mobile Gray Night Street Map"), tr("Mobile color-reduced map view in night mode (especially used for background maps)"), true, true, 16);
-    types << QGeoMapType(QGeoMapType::PedestrianMap, tr("Pedestrian Street Map"), tr("Pedestrian map view in daylight mode"), false, false, 17);
-    types << QGeoMapType(QGeoMapType::PedestrianMap, tr("Mobile Pedestrian Street Map"), tr("Mobile pedestrian map view in daylight mode for mobile usage"), true, false, 18);
-    types << QGeoMapType(QGeoMapType::PedestrianMap, tr("Pedestrian Night Street Map"), tr("Pedestrian map view in night mode"), false, true, 19);
-    types << QGeoMapType(QGeoMapType::PedestrianMap, tr("Mobile Pedestrian Night Street Map"), tr("Mobile pedestrian map view in night mode for mobile usage"), true, true, 20);
-    types << QGeoMapType(QGeoMapType::CarNavigationMap, tr("Car Navigation Map"), tr("Normal map view in daylight mode for car navigation"), false, false, 21);
+    types << QGeoMapType(QGeoMapType::StreetMap, tr("Street Map"), tr("Normal map view in daylight mode"), false, false, 1, pluginName);
+    types << QGeoMapType(QGeoMapType::SatelliteMapDay, tr("Satellite Map"), tr("Satellite map view in daylight mode"), false, false, 2, pluginName);
+    types << QGeoMapType(QGeoMapType::TerrainMap, tr("Terrain Map"), tr("Terrain map view in daylight mode"), false, false, 3, pluginName);
+    types << QGeoMapType(QGeoMapType::HybridMap, tr("Hybrid Map"), tr("Satellite map view with streets in daylight mode"), false, false, 4, pluginName);
+    types << QGeoMapType(QGeoMapType::TransitMap, tr("Transit Map"), tr("Color-reduced map view with public transport scheme in daylight mode"), false, false, 5, pluginName);
+    types << QGeoMapType(QGeoMapType::GrayStreetMap, tr("Gray Street Map"), tr("Color-reduced map view in daylight mode"), false, false, 6, pluginName);
+    types << QGeoMapType(QGeoMapType::StreetMap, tr("Mobile Street Map"), tr("Mobile normal map view in daylight mode"), true, false, 7, pluginName);
+    types << QGeoMapType(QGeoMapType::TerrainMap, tr("Mobile Terrain Map"), tr("Mobile terrain map view in daylight mode"), true, false, 8, pluginName);
+    types << QGeoMapType(QGeoMapType::HybridMap, tr("Mobile Hybrid Map"), tr("Mobile satellite map view with streets in daylight mode"), true, false, 9, pluginName);
+    types << QGeoMapType(QGeoMapType::TransitMap, tr("Mobile Transit Map"), tr("Mobile color-reduced map view with public transport scheme in daylight mode"), true, false, 10, pluginName);
+    types << QGeoMapType(QGeoMapType::GrayStreetMap, tr("Mobile Gray Street Map"), tr("Mobile color-reduced map view in daylight mode"), true, false, 11, pluginName);
+    types << QGeoMapType(QGeoMapType::StreetMap, tr("Custom Street Map"), tr("Normal map view in daylight mode"), false, false, 12, pluginName);
+    types << QGeoMapType(QGeoMapType::StreetMap, tr("Night Street Map"), tr("Normal map view in night mode"), false, true, 13, pluginName);
+    types << QGeoMapType(QGeoMapType::StreetMap, tr("Mobile Night Street Map"), tr("Mobile normal map view in night mode"), true, true, 14, pluginName);
+    types << QGeoMapType(QGeoMapType::GrayStreetMap, tr("Gray Night Street Map"), tr("Color-reduced map view in night mode (especially used for background maps)"), false, true, 15, pluginName);
+    types << QGeoMapType(QGeoMapType::GrayStreetMap, tr("Mobile Gray Night Street Map"), tr("Mobile color-reduced map view in night mode (especially used for background maps)"), true, true, 16, pluginName);
+    types << QGeoMapType(QGeoMapType::PedestrianMap, tr("Pedestrian Street Map"), tr("Pedestrian map view in daylight mode"), false, false, 17, pluginName);
+    types << QGeoMapType(QGeoMapType::PedestrianMap, tr("Mobile Pedestrian Street Map"), tr("Mobile pedestrian map view in daylight mode for mobile usage"), true, false, 18, pluginName);
+    types << QGeoMapType(QGeoMapType::PedestrianMap, tr("Pedestrian Night Street Map"), tr("Pedestrian map view in night mode"), false, true, 19, pluginName);
+    types << QGeoMapType(QGeoMapType::PedestrianMap, tr("Mobile Pedestrian Night Street Map"), tr("Mobile pedestrian map view in night mode for mobile usage"), true, true, 20, pluginName);
+    types << QGeoMapType(QGeoMapType::CarNavigationMap, tr("Car Navigation Map"), tr("Normal map view in daylight mode for car navigation"), false, false, 21, pluginName);
     setSupportedMapTypes(types);
 
-    QGeoTileFetcherNokia *fetcher = new QGeoTileFetcherNokia(parameters, networkManager, this, tileSize());
+    QGeoTileFetcherNokia *fetcher = new QGeoTileFetcherNokia(parameters, networkManager, this, tileSize(), ppi);
     setTileFetcher(fetcher);
 
+    /* TILE CACHE */
     // TODO: do this in a plugin-neutral way so that other tiled map plugins
     //       don't need this boilerplate or hardcode plugin name
-
     if (parameters.contains(QStringLiteral("here.mapping.cache.directory"))) {
         m_cacheDirectory = parameters.value(QStringLiteral("here.mapping.cache.directory")).toString();
     } else {
         // managerName() is not yet set, we have to hardcode the plugin name below
-        m_cacheDirectory = QAbstractGeoTileCache::baseCacheDirectory() + QLatin1String("here");
+        m_cacheDirectory = QAbstractGeoTileCache::baseLocationCacheDirectory() + QLatin1String(pluginName);
     }
 
-    QAbstractGeoTileCache *tileCache = new QGeoFileTileCache(m_cacheDirectory);
-    setTileCache(tileCache);
+    QGeoFileTileCache *tileCache = new QGeoFileTileCacheNokia(ppi, m_cacheDirectory);
 
+    /*
+     * Disk cache setup -- defaults to ByteSize (old behavior)
+     */
+    if (parameters.contains(QStringLiteral("here.mapping.cache.disk.cost_strategy"))) {
+        QString cacheStrategy = parameters.value(QStringLiteral("here.mapping.cache.disk.cost_strategy")).toString().toLower();
+        if (cacheStrategy == QLatin1String("bytesize"))
+            tileCache->setCostStrategyDisk(QGeoFileTileCache::ByteSize);
+        else
+            tileCache->setCostStrategyDisk(QGeoFileTileCache::Unitary);
+    } else {
+        tileCache->setCostStrategyDisk(QGeoFileTileCache::ByteSize);
+    }
     if (parameters.contains(QStringLiteral("here.mapping.cache.disk.size"))) {
       bool ok = false;
       int cacheSize = parameters.value(QStringLiteral("here.mapping.cache.disk.size")).toString().toInt(&ok);
@@ -118,6 +149,18 @@ QGeoTiledMappingManagerEngineNokia::QGeoTiledMappingManagerEngineNokia(
           tileCache->setMaxDiskUsage(cacheSize);
     }
 
+    /*
+     * Memory cache setup -- defaults to ByteSize (old behavior)
+     */
+    if (parameters.contains(QStringLiteral("here.mapping.cache.memory.cost_strategy"))) {
+        QString cacheStrategy = parameters.value(QStringLiteral("here.mapping.cache.memory.cost_strategy")).toString().toLower();
+        if (cacheStrategy == QLatin1String("bytesize"))
+            tileCache->setCostStrategyMemory(QGeoFileTileCache::ByteSize);
+        else
+            tileCache->setCostStrategyMemory(QGeoFileTileCache::Unitary);
+    } else {
+        tileCache->setCostStrategyMemory(QGeoFileTileCache::ByteSize);
+    }
     if (parameters.contains(QStringLiteral("here.mapping.cache.memory.size"))) {
       bool ok = false;
       int cacheSize = parameters.value(QStringLiteral("here.mapping.cache.memory.size")).toString().toInt(&ok);
@@ -125,6 +168,18 @@ QGeoTiledMappingManagerEngineNokia::QGeoTiledMappingManagerEngineNokia(
           tileCache->setMaxMemoryUsage(cacheSize);
     }
 
+    /*
+     * Texture cache setup -- defaults to ByteSize (old behavior)
+     */
+    if (parameters.contains(QStringLiteral("here.mapping.cache.texture.cost_strategy"))) {
+        QString cacheStrategy = parameters.value(QStringLiteral("here.mapping.cache.texture.cost_strategy")).toString().toLower();
+        if (cacheStrategy == QLatin1String("bytesize"))
+            tileCache->setCostStrategyTexture(QGeoFileTileCache::ByteSize);
+        else
+            tileCache->setCostStrategyTexture(QGeoFileTileCache::Unitary);
+    } else {
+        tileCache->setCostStrategyTexture(QGeoFileTileCache::ByteSize);
+    }
     if (parameters.contains(QStringLiteral("here.mapping.cache.texture.size"))) {
       bool ok = false;
       int cacheSize = parameters.value(QStringLiteral("here.mapping.cache.texture.size")).toString().toInt(&ok);
@@ -132,6 +187,18 @@ QGeoTiledMappingManagerEngineNokia::QGeoTiledMappingManagerEngineNokia(
           tileCache->setExtraTextureUsage(cacheSize);
     }
 
+    /* PREFETCHING */
+    if (parameters.contains(QStringLiteral("here.mapping.prefetching_style"))) {
+        const QString prefetchingMode = parameters.value(QStringLiteral("here.mapping.prefetching_style")).toString();
+        if (prefetchingMode == QStringLiteral("TwoNeighbourLayers"))
+            m_prefetchStyle = QGeoTiledMap::PrefetchTwoNeighbourLayers;
+        else if (prefetchingMode == QStringLiteral("OneNeighbourLayer"))
+            m_prefetchStyle = QGeoTiledMap::PrefetchNeighbourLayer;
+        else if (prefetchingMode == QStringLiteral("NoPrefetching"))
+            m_prefetchStyle = QGeoTiledMap::NoPrefetching;
+    }
+
+    setTileCache(tileCache);
     populateMapSchemes();
     loadMapVersion();
     QMetaObject::invokeMethod(fetcher, "fetchCopyrightsData", Qt::QueuedConnection);
@@ -194,13 +261,12 @@ void QGeoTiledMappingManagerEngineNokia::loadCopyrightsDescriptorsFromJson(const
     }
 
     QJsonObject jsonObj = doc.object();
-    QStringList keys = jsonObj.keys();
 
     m_copyrights.clear();
-    for (int keyIndex = 0; keyIndex < keys.count(); keyIndex++) {
+    for (auto it = jsonObj.constBegin(), end = jsonObj.constEnd(); it != end; ++it) {
         QList<CopyrightDesc> copyrightDescList;
 
-        QJsonArray descs = jsonObj[ keys[ keyIndex ] ].toArray();
+        QJsonArray descs = it.value().toArray();
         for (int descIndex = 0; descIndex < descs.count(); descIndex++) {
             CopyrightDesc copyrightDesc;
             QJsonObject desc = descs.at(descIndex).toObject();
@@ -225,7 +291,7 @@ void QGeoTiledMappingManagerEngineNokia::loadCopyrightsDescriptorsFromJson(const
             }
             copyrightDescList << copyrightDesc;
         }
-        m_copyrights[ keys[ keyIndex ] ] = copyrightDescList;
+        m_copyrights[it.key()] = copyrightDescList;
     }
 }
 
@@ -336,10 +402,10 @@ QString QGeoTiledMappingManagerEngineNokia::evaluateCopyrightsText(const QGeoMap
 
         pt.setX(viewX0 / divFactor);
         pt.setY(viewY0 / divFactor);
-        viewport.setTopLeft(QGeoProjection::mercatorToCoord(pt));
+        viewport.setTopLeft(QWebMercator::mercatorToCoord(pt));
         pt.setX(viewX1 / divFactor);
         pt.setY(viewY1 / divFactor);
-        viewport.setBottomRight(QGeoProjection::mercatorToCoord(pt));
+        viewport.setBottomRight(QWebMercator::mercatorToCoord(pt));
     }
 
     // TODO: the following invalidation detection algorithm may be improved later.
@@ -378,7 +444,9 @@ QString QGeoTiledMappingManagerEngineNokia::evaluateCopyrightsText(const QGeoMap
 
 QGeoMap *QGeoTiledMappingManagerEngineNokia::createMap()
 {
-    return new QGeoTiledMapNokia(this);
+    QGeoTiledMap *map = new QGeoTiledMapNokia(this);
+    map->setPrefetchStyle(m_prefetchStyle);
+    return map;
 }
 
 QT_END_NAMESPACE

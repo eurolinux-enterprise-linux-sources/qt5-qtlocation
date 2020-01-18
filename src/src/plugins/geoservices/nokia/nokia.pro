@@ -2,15 +2,9 @@ TARGET = qtgeoservices_nokia
 
 QT += location-private positioning-private network
 
-contains(QT_CONFIG, location-china-support) {
-    # China support
-    DEFINES += USE_CHINA_NETWORK_REGISTRATION
-    QT += systeminfo
-}
-
 HEADERS += \
             qgeocodereply_nokia.h \
-            qgeocodexmlparser.h \
+            qgeocodejsonparser.h \
             qgeocodingmanagerengine_nokia.h \
             qgeotiledmappingmanagerengine_nokia.h \
             qgeotilefetcher_nokia.h \
@@ -26,12 +20,13 @@ HEADERS += \
             uri_constants.h \
             qgeoerror_messages.h \
             qgeomapversion.h \
-            qgeotiledmap_nokia.h
+            qgeotiledmap_nokia.h \
+            qgeofiletilecachenokia.h
 
 
 SOURCES += \
             qgeocodereply_nokia.cpp \
-            qgeocodexmlparser.cpp \
+            qgeocodejsonparser.cpp \
             qgeocodingmanagerengine_nokia.cpp \
             qgeotiledmappingmanagerengine_nokia.cpp \
             qgeotilefetcher_nokia.cpp \
@@ -45,11 +40,12 @@ SOURCES += \
             uri_constants.cpp \
             qgeoerror_messages.cpp \
             qgeomapversion.cpp \
-            qgeotiledmap_nokia.cpp
+            qgeotiledmap_nokia.cpp \
+            qgeofiletilecachenokia.cpp
 
 include(placesv2/placesv2.pri)
 
-RESOURCES += resource.qrc
+RESOURCES += nokia.qrc
 
 INCLUDEPATH += ../../../location/maps
 

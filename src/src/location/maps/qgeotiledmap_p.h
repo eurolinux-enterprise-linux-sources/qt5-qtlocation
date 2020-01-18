@@ -49,10 +49,10 @@
 
 #include <QObject>
 #include <QString>
-
-#include "qgeomap_p.h"
-#include "qgeocameradata_p.h"
-#include "qgeomaptype_p.h"
+#include <QtLocation/private/qlocationglobal_p.h>
+#include <QtLocation/private/qgeomap_p.h>
+#include <QtLocation/private/qgeocameradata_p.h>
+#include <QtLocation/private/qgeomaptype_p.h>
 
 #include <QtPositioning/private/qdoublevector2d_p.h>
 
@@ -70,29 +70,31 @@ class QSGNode;
 
 class QPointF;
 
-class Q_LOCATION_EXPORT QGeoTiledMap : public QGeoMap
+class Q_LOCATION_PRIVATE_EXPORT QGeoTiledMap : public QGeoMap
 {
     Q_OBJECT
     Q_DECLARE_PRIVATE(QGeoTiledMap)
-
 public:
+    enum PrefetchStyle { NoPrefetching, PrefetchNeighbourLayer, PrefetchTwoNeighbourLayers };
     QGeoTiledMap(QGeoTiledMappingManagerEngine *engine, QObject *parent);
     virtual ~QGeoTiledMap();
 
     QAbstractGeoTileCache *tileCache();
     QGeoTileRequestManager *requestManager();
     void updateTile(const QGeoTileSpec &spec);
+    void setPrefetchStyle(PrefetchStyle style);
 
-    QGeoCoordinate itemPositionToCoordinate(const QDoubleVector2D &pos, bool clipToViewport = true) const Q_DECL_OVERRIDE;
-    QDoubleVector2D coordinateToItemPosition(const QGeoCoordinate &coordinate, bool clipToViewport = true) const Q_DECL_OVERRIDE;
-    QDoubleVector2D referenceCoordinateToItemPosition(const QGeoCoordinate &coordinate) const Q_DECL_OVERRIDE;
-    QGeoCoordinate referenceItemPositionToCoordinate(const QDoubleVector2D &pos) const Q_DECL_OVERRIDE;
     void prefetchData() Q_DECL_OVERRIDE;
     void clearData() Q_DECL_OVERRIDE;
+
+public Q_SLOTS:
+    virtual void clearScene(int mapId);
 
 protected:
     QSGNode *updateSceneGraph(QSGNode *, QQuickWindow *window) Q_DECL_OVERRIDE;
     virtual void evaluateCopyrights(const QSet<QGeoTileSpec> &visibleTiles);
+
+    QGeoTiledMap(QGeoTiledMapPrivate &dd, QGeoTiledMappingManagerEngine *engine, QObject *parent);
 
 private Q_SLOTS:
     void handleTileVersionChanged();

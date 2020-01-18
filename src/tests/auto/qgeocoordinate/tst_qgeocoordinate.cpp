@@ -1,31 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -474,7 +469,10 @@ private slots:
         QFETCH(QGeoCoordinate, c2);
         QFETCH(qreal, azimuth);
 
-        QCOMPARE(QString::number(c1.azimuthTo(c2)), QString::number(azimuth));
+        qreal result = c1.azimuthTo(c2);
+        QVERIFY(result >= 0.0);
+        QVERIFY(result < 360.0);
+        QCOMPARE(QString::number(result), QString::number(azimuth));
     }
 
     void azimuthTo_data()
@@ -493,6 +491,8 @@ private slots:
                 << LONDON << NEW_YORK << qreal(288.3388804508);
         QTest::newRow("north pole -> south pole")
                 << NORTH_POLE << SOUTH_POLE << qreal(180.0);
+        QTest::newRow("Almost 360degrees bearing")
+                << QGeoCoordinate(0.5,45.0,0.0) << QGeoCoordinate(0.5,-134.9999651,0.0)  << qreal(359.998);
     }
 
     void atDistanceAndAzimuth()
@@ -894,16 +894,57 @@ private slots:
         QTest::addColumn<int>("nextValue");
         QTest::addColumn<QByteArray>("debugString");
 
-
         QTest::newRow("uninitialized") << QGeoCoordinate() << 45
                 << QByteArray("QGeoCoordinate(?, ?) 45");
         QTest::newRow("initialized without altitude") << BRISBANE << 45
-                << (QString("QGeoCoordinate(%1, %2) 45").arg(BRISBANE.latitude())
-                        .arg(BRISBANE.longitude())).toLatin1();
+                << (QString("QGeoCoordinate(%1, %2) 45").arg(BRISBANE.latitude(), 0, 'g', 9)
+                        .arg(BRISBANE.longitude(), 0, 'g', 9)).toLatin1();
         QTest::newRow("invalid initialization") << QGeoCoordinate(-100,-200) << 45
                 << QByteArray("QGeoCoordinate(?, ?) 45");
         QTest::newRow("initialized with altitude") << QGeoCoordinate(1,2,3) << 45
                 << QByteArray("QGeoCoordinate(1, 2, 3) 45");
+        QTest::newRow("extra long coordinates") << QGeoCoordinate(89.123412341, 179.123412341)
+                << 45 << QByteArray("QGeoCoordinate(89.123412341, 179.12341234) 45");
+    }
+
+    void hash()
+    {
+        uint s1 = qHash(QGeoCoordinate(1, 1, 2));
+        uint s2 = qHash(QGeoCoordinate(2, 1, 1));
+        uint s3 = qHash(QGeoCoordinate(1, 2, 1));
+        uint s10 = qHash(QGeoCoordinate(0, 0, 2));
+        uint s20 = qHash(QGeoCoordinate(2, 0, 0));
+        uint s30 = qHash(QGeoCoordinate(0, 2, 0));
+        uint s30NoAlt = qHash(QGeoCoordinate(0, 2));
+        uint s30WithSeed = qHash(QGeoCoordinate(0, 2, 0), 1);
+        uint nullCoordinate = qHash(QGeoCoordinate());
+
+        uint north1 = qHash(QGeoCoordinate(90.0, 34.7, 0));
+        uint north2 = qHash(QGeoCoordinate(90.0, 180, 0));
+
+        uint south1 = qHash(QGeoCoordinate(90.0, 67.7, 34.0));
+        uint south2 = qHash(QGeoCoordinate(90.0, 111, 34.0));
+
+        QVERIFY(s1 != s2);
+        QVERIFY(s2 != s3);
+        QVERIFY(s1 != s3);
+        QVERIFY(s10 != s20);
+        QVERIFY(s20 != s30);
+        QVERIFY(s10 != s30);
+        QVERIFY(s30NoAlt != s30);
+        QVERIFY(s30WithSeed != s30);
+
+        QVERIFY(nullCoordinate != s1);
+        QVERIFY(nullCoordinate != s2);
+        QVERIFY(nullCoordinate != s3);
+        QVERIFY(nullCoordinate != s10);
+        QVERIFY(nullCoordinate != s20);
+        QVERIFY(nullCoordinate != s30);
+        QVERIFY(nullCoordinate != s30NoAlt);
+        QVERIFY(nullCoordinate != s30WithSeed);
+
+        QVERIFY(north1 == north2);
+        QVERIFY(south1 == south2);
     }
 };
 

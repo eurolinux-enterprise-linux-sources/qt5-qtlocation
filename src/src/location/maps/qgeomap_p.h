@@ -47,70 +47,104 @@
 // We mean it.
 //
 
-#include "qgeocameradata_p.h"
-#include "qgeomaptype_p.h"
+#include <QtLocation/private/qlocationglobal_p.h>
+#include <QtLocation/private/qgeocameradata_p.h>
+#include <QtLocation/private/qgeomaptype_p.h>
+#include <QtLocation/private/qgeocameracapabilities_p.h>
 #include <QtCore/QObject>
 #include <QtPositioning/private/qdoublevector2d_p.h>
+#include <QtLocation/private/qgeoprojection_p.h>
 
 QT_BEGIN_NAMESPACE
 
 class QGeoMappingManagerEngine;
 class QGeoMapPrivate;
 class QGeoMapController;
-class QGeoCameraCapabilities;
 class QGeoCoordinate;
 class QSGNode;
 class QQuickWindow;
+class QGeoMapParameter;
+class QDeclarativeGeoMapItemBase;
 
-class Q_LOCATION_EXPORT QGeoMap : public QObject
+class Q_LOCATION_PRIVATE_EXPORT QGeoMap : public QObject
 {
     Q_OBJECT
     Q_DECLARE_PRIVATE(QGeoMap)
 
 public:
+    enum ItemType {
+        NoItem = 0x0000,
+        MapRectangle = 0x0001,
+        MapCircle = 0x0002,
+        MapPolyline = 0x0004,
+        MapPolygon = 0x0008,
+        MapQuickItem = 0x0010,
+        CustomMapItem = 0x8000
+    };
+
+    Q_DECLARE_FLAGS(ItemTypes, ItemType)
+
     virtual ~QGeoMap();
 
-    QGeoMapController *mapController();
+    // Sets the display size
+    void setViewportSize(const QSize& viewportSize);
+    QSize viewportSize() const;
+    int viewportWidth() const;
+    int viewportHeight() const;
 
-    void resize(int width, int height);
-    int width() const;
-    int height() const;
 
     QGeoCameraData cameraData() const;
+    QGeoCameraCapabilities cameraCapabilities() const;
 
     void setActiveMapType(const QGeoMapType mapType);
     const QGeoMapType activeMapType() const;
 
-    virtual QGeoCoordinate itemPositionToCoordinate(const QDoubleVector2D &pos, bool clipToViewport = true) const = 0;
-    virtual QDoubleVector2D coordinateToItemPosition(const QGeoCoordinate &coordinate, bool clipToViewport = true) const = 0;
-    virtual QDoubleVector2D referenceCoordinateToItemPosition(const QGeoCoordinate &coordinate) const = 0;
-    virtual QGeoCoordinate referenceItemPositionToCoordinate(const QDoubleVector2D &pos) const = 0;
+    // returns the minimum zoom at the current viewport size
+    double minimumZoom() const;
+    double maximumCenterLatitudeAtZoom(const QGeoCameraData &cameraData) const;
+
+    // returns the size of the underlying map, at the current zoom level. Unrelated to width()/height()/size().
+    double mapWidth() const;
+    double mapHeight() const;
+
+    const QGeoProjection &geoProjection() const;
+
     virtual void prefetchData();
     virtual void clearData();
 
-    QGeoCameraCapabilities cameraCapabilities();
+    void addParameter(QGeoMapParameter *param);
+    void removeParameter(QGeoMapParameter *param);
+    void clearParameters();
 
+    ItemTypes supportedMapItemTypes() const;
+
+    void addMapItem(QDeclarativeGeoMapItemBase *item);
+    void removeMapItem(QDeclarativeGeoMapItemBase *item);
+    void clearMapItems();
+
+    virtual QString copyrightsStyleSheet() const;
 
 protected:
     QGeoMap(QGeoMapPrivate &dd, QObject *parent = 0);
     void setCameraData(const QGeoCameraData &cameraData);
+    void setCameraCapabilities(const QGeoCameraCapabilities &cameraCapabilities);
     virtual QSGNode *updateSceneGraph(QSGNode *node, QQuickWindow *window) = 0;
-
-public Q_SLOTS:
-    void update();
 
 Q_SIGNALS:
     void cameraDataChanged(const QGeoCameraData &cameraData);
-    void updateRequired();
+    void sgNodeChanged();
     void activeMapTypeChanged();
+    void cameraCapabilitiesChanged(const QGeoCameraCapabilities &oldCameraCapabilities);
     void copyrightsChanged(const QImage &copyrightsImage);
     void copyrightsChanged(const QString &copyrightsHtml);
+    void copyrightsStyleSheetChanged(const QString &styleSheet);
 
 private:
     Q_DISABLE_COPY(QGeoMap)
-    friend class QGeoMapController; //setCameraData
     friend class QDeclarativeGeoMap; //updateSceneGraph
 };
+
+Q_DECLARE_OPERATORS_FOR_FLAGS(QGeoMap::ItemTypes)
 
 QT_END_NAMESPACE
 

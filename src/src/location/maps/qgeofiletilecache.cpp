@@ -86,32 +86,61 @@ QGeoCachedTileDisk::~QGeoCachedTileDisk()
 }
 
 QGeoFileTileCache::QGeoFileTileCache(const QString &directory, QObject *parent)
-    : QAbstractGeoTileCache(parent), directory_(directory),
-      minTextureUsage_(0), extraTextureUsage_(0)
+    : QAbstractGeoTileCache(parent), directory_(directory), minTextureUsage_(0), extraTextureUsage_(0)
+    ,costStrategyDisk_(ByteSize), costStrategyMemory_(ByteSize), costStrategyTexture_(ByteSize)
+    ,isDiskCostSet_(false), isMemoryCostSet_(false), isTextureCostSet_(false)
 {
-    const QString basePath = baseCacheDirectory();
 
-    // delete old tiles from QtLocation 5.4 or prior
-    // Newer version use plugin-specific subdirectories so those are not affected.
+}
+
+void QGeoFileTileCache::init()
+{
+    const QString basePath = baseCacheDirectory() + QLatin1String("QtLocation/");
+
+    // delete old tiles from QtLocation 5.7 or prior
+    // Newer version use plugin-specific subdirectories, versioned with qt version so those are not affected.
     // TODO Remove cache cleanup in Qt 6
     QDir baseDir(basePath);
     if (baseDir.exists()) {
         const QStringList oldCacheFiles = baseDir.entryList(QDir::Files);
         foreach (const QString& file, oldCacheFiles)
             baseDir.remove(file);
+        const QStringList oldCacheDirs = { QStringLiteral("osm"), QStringLiteral("mapbox"), QStringLiteral("here") };
+        foreach (const QString& d, oldCacheDirs) {
+            QDir oldCacheDir(basePath + QLatin1Char('/') + d);
+            if (oldCacheDir.exists())
+                oldCacheDir.removeRecursively();
+        }
     }
 
     if (directory_.isEmpty()) {
-        directory_ = basePath;
+        directory_ = baseLocationCacheDirectory();
         qWarning() << "Plugin uses uninitialized QGeoFileTileCache directory which was deleted during startup";
     }
 
     QDir::root().mkpath(directory_);
 
     // default values
-    setMaxDiskUsage(20 * 1024 * 1024);
-    setMaxMemoryUsage(3 * 1024 * 1024);
-    setExtraTextureUsage(6 * 1024 * 1024);
+    if (!isDiskCostSet_) { // If setMaxDiskUsage has not been called yet
+        if (costStrategyDisk_ == ByteSize)
+            setMaxDiskUsage(50 * 1024 * 1024);
+        else
+            setMaxDiskUsage(1000);
+    }
+
+    if (!isMemoryCostSet_) { // If setMaxMemoryUsage has not been called yet
+        if (costStrategyMemory_ == ByteSize)
+            setMaxMemoryUsage(3 * 1024 * 1024);
+        else
+            setMaxMemoryUsage(100);
+    }
+
+    if (!isTextureCostSet_) { // If setExtraTextureUsage has not been called yet
+        if (costStrategyTexture_ == ByteSize)
+            setExtraTextureUsage(6 * 1024 * 1024);
+        else
+            setExtraTextureUsage(30); // byte size of texture is >> compressed image, hence unitary cost should be lower
+    }
 
     loadTiles();
 }
@@ -123,7 +152,7 @@ void QGeoFileTileCache::loadTiles()
 
     QDir dir(directory_);
     QStringList files = dir.entryList(formats, QDir::Files);
-
+#if 0 // workaround for QTBUG-60581
     // Method:
     // 1. read each queue file then, if each file exists, deserialize the data into the appropriate
     // cache queue.
@@ -150,14 +179,18 @@ void QGeoFileTileCache::loadTiles()
                 QFileInfo fi(tileDisk->filename);
                 specs.append(spec);
                 queue.append(tileDisk);
-                costs.append(fi.size());
+                if (costStrategyDisk_ == ByteSize)
+                    costs.append(fi.size());
+                else
+                    costs.append(1);
+
             }
         }
 
         diskCache_.deserializeQueue(i, specs, queue, costs);
         file.close();
     }
-
+#endif
     // 2. remaining tiles that aren't registered in a queue get pushed into cache here
     // this is a backup, in case the queue manifest files get deleted or out of sync due to
     // the application not closing down properly
@@ -172,6 +205,7 @@ void QGeoFileTileCache::loadTiles()
 
 QGeoFileTileCache::~QGeoFileTileCache()
 {
+#if 0 // workaround for QTBUG-60581
     // write disk cache queues to disk
     QDir dir(directory_);
     for (int i = 1; i<=4; i++) {
@@ -194,6 +228,7 @@ QGeoFileTileCache::~QGeoFileTileCache()
         }
         file.close();
     }
+#endif
 }
 
 void QGeoFileTileCache::printStats()
@@ -206,6 +241,7 @@ void QGeoFileTileCache::printStats()
 void QGeoFileTileCache::setMaxDiskUsage(int diskUsage)
 {
     diskCache_.setMaxCost(diskUsage);
+    isDiskCostSet_ = true;
 }
 
 int QGeoFileTileCache::maxDiskUsage() const
@@ -221,6 +257,7 @@ int QGeoFileTileCache::diskUsage() const
 void QGeoFileTileCache::setMaxMemoryUsage(int memoryUsage)
 {
     memoryCache_.setMaxCost(memoryUsage);
+    isMemoryCostSet_ = true;
 }
 
 int QGeoFileTileCache::maxMemoryUsage() const
@@ -237,6 +274,7 @@ void QGeoFileTileCache::setExtraTextureUsage(int textureUsage)
 {
     extraTextureUsage_ = textureUsage;
     textureCache_.setMaxCost(minTextureUsage_ + extraTextureUsage_);
+    isTextureCostSet_ = true;
 }
 
 void QGeoFileTileCache::setMinTextureUsage(int textureUsage)
@@ -274,66 +312,86 @@ void QGeoFileTileCache::clearAll()
     }
 }
 
+void QGeoFileTileCache::clearMapId(const int mapId)
+{
+    for (const QGeoTileSpec &k : diskCache_.keys())
+        if (k.mapId() == mapId)
+            diskCache_.remove(k, true);
+    for (const QGeoTileSpec &k : memoryCache_.keys())
+        if (k.mapId() == mapId)
+            memoryCache_.remove(k);
+    for (const QGeoTileSpec &k : textureCache_.keys())
+        if (k.mapId() == mapId)
+            textureCache_.remove(k);
+
+    // TODO: It seems the cache leaves residues, like some tiles do not get picked up.
+    // After the above calls, files that shouldnt be left behind are still on disk.
+    // Do an additional pass and make sure what has to be deleted gets deleted.
+    QDir dir(directory_);
+    QStringList formats;
+    formats << QLatin1String("*.*");
+    QStringList files = dir.entryList(formats, QDir::Files);
+    qWarning() << "Old tile data detected. Cache eviction left out "<< files.size() << "tiles";
+    for (const QString &tileFileName : files) {
+        QGeoTileSpec spec = filenameToTileSpec(tileFileName);
+        if (spec.mapId() != mapId)
+            continue;
+        QFile::remove(dir.filePath(tileFileName));
+    }
+}
+
+void QGeoFileTileCache::setCostStrategyDisk(QAbstractGeoTileCache::CostStrategy costStrategy)
+{
+    costStrategyDisk_ = costStrategy;
+}
+
+QAbstractGeoTileCache::CostStrategy QGeoFileTileCache::costStrategyDisk() const
+{
+    return costStrategyDisk_;
+}
+
+void QGeoFileTileCache::setCostStrategyMemory(QAbstractGeoTileCache::CostStrategy costStrategy)
+{
+    costStrategyMemory_ = costStrategy;
+}
+
+QAbstractGeoTileCache::CostStrategy QGeoFileTileCache::costStrategyMemory() const
+{
+    return costStrategyMemory_;
+}
+
+void QGeoFileTileCache::setCostStrategyTexture(QAbstractGeoTileCache::CostStrategy costStrategy)
+{
+    costStrategyTexture_ = costStrategy;
+}
+
+QAbstractGeoTileCache::CostStrategy QGeoFileTileCache::costStrategyTexture() const
+{
+    return costStrategyTexture_;
+}
+
 QSharedPointer<QGeoTileTexture> QGeoFileTileCache::get(const QGeoTileSpec &spec)
 {
-    QSharedPointer<QGeoTileTexture> tt = textureCache_.object(spec);
+    QSharedPointer<QGeoTileTexture> tt = getFromMemory(spec);
     if (tt)
         return tt;
-
-    QSharedPointer<QGeoCachedTileMemory> tm = memoryCache_.object(spec);
-    if (tm) {
-        QImage image;
-        if (!image.loadFromData(tm->bytes)) {
-            handleError(spec, QLatin1String("Problem with tile image"));
-            return QSharedPointer<QGeoTileTexture>(0);
-        }
-        QSharedPointer<QGeoTileTexture> tt = addToTextureCache(spec, image);
-        if (tt)
-            return tt;
-    }
-
-    QSharedPointer<QGeoCachedTileDisk> td = diskCache_.object(spec);
-    if (td) {
-        const QString format = QFileInfo(td->filename).suffix();
-        QFile file(td->filename);
-        file.open(QIODevice::ReadOnly);
-        QByteArray bytes = file.readAll();
-        file.close();
-
-        QImage image;
-        if (!image.loadFromData(bytes)) {
-            handleError(spec, QLatin1String("Problem with tile image"));
-            return QSharedPointer<QGeoTileTexture>(0);
-        }
-
-        addToMemoryCache(spec, bytes, format);
-        QSharedPointer<QGeoTileTexture> tt = addToTextureCache(td->spec, image);
-        if (tt)
-            return tt;
-    }
-
-    return QSharedPointer<QGeoTileTexture>();
+    return getFromDisk(spec);
 }
 
 void QGeoFileTileCache::insert(const QGeoTileSpec &spec,
                            const QByteArray &bytes,
                            const QString &format,
-                           QGeoTiledMappingManagerEngine::CacheAreas areas)
+                           QAbstractGeoTileCache::CacheAreas areas)
 {
     if (bytes.isEmpty())
         return;
 
-    if (areas & QGeoTiledMappingManagerEngine::DiskCache) {
+    if (areas & QAbstractGeoTileCache::DiskCache) {
         QString filename = tileSpecToFilename(spec, format, directory_);
-        QFile file(filename);
-        file.open(QIODevice::WriteOnly);
-        file.write(bytes);
-        file.close();
-
-        addToDiskCache(spec, filename);
+        addToDiskCache(spec, filename, bytes);
     }
 
-    if (areas & QGeoTiledMappingManagerEngine::MemoryCache) {
+    if (areas & QAbstractGeoTileCache::MemoryCache) {
         addToMemoryCache(spec, bytes, format);
     }
 
@@ -342,55 +400,7 @@ void QGeoFileTileCache::insert(const QGeoTileSpec &spec,
      * and act as a poison */
 }
 
-void QGeoFileTileCache::evictFromDiskCache(QGeoCachedTileDisk *td)
-{
-    QFile::remove(td->filename);
-}
-
-void QGeoFileTileCache::evictFromMemoryCache(QGeoCachedTileMemory * /* tm  */)
-{
-}
-
-QSharedPointer<QGeoCachedTileDisk> QGeoFileTileCache::addToDiskCache(const QGeoTileSpec &spec, const QString &filename)
-{
-    QSharedPointer<QGeoCachedTileDisk> td(new QGeoCachedTileDisk);
-    td->spec = spec;
-    td->filename = filename;
-    td->cache = this;
-
-    QFileInfo fi(filename);
-    int diskCost = fi.size();
-    diskCache_.insert(spec, td, diskCost);
-    return td;
-}
-
-QSharedPointer<QGeoCachedTileMemory> QGeoFileTileCache::addToMemoryCache(const QGeoTileSpec &spec, const QByteArray &bytes, const QString &format)
-{
-    QSharedPointer<QGeoCachedTileMemory> tm(new QGeoCachedTileMemory);
-    tm->spec = spec;
-    tm->cache = this;
-    tm->bytes = bytes;
-    tm->format = format;
-
-    int cost = bytes.size();
-    memoryCache_.insert(spec, tm, cost);
-
-    return tm;
-}
-
-QSharedPointer<QGeoTileTexture> QGeoFileTileCache::addToTextureCache(const QGeoTileSpec &spec, const QImage &image)
-{
-    QSharedPointer<QGeoTileTexture> tt(new QGeoTileTexture);
-    tt->spec = spec;
-    tt->image = image;
-
-    int textureCost = image.width() * image.height() * image.depth() / 8;
-    textureCache_.insert(spec, tt, textureCost);
-
-    return tt;
-}
-
-QString QGeoFileTileCache::tileSpecToFilename(const QGeoTileSpec &spec, const QString &format, const QString &directory)
+QString QGeoFileTileCache::tileSpecToFilenameDefault(const QGeoTileSpec &spec, const QString &format, const QString &directory)
 {
     QString filename = spec.plugin();
     filename += QLatin1String("-");
@@ -416,7 +426,7 @@ QString QGeoFileTileCache::tileSpecToFilename(const QGeoTileSpec &spec, const QS
     return dir.filePath(filename);
 }
 
-QGeoTileSpec QGeoFileTileCache::filenameToTileSpec(const QString &filename)
+QGeoTileSpec QGeoFileTileCache::filenameToTileSpecDefault(const QString &filename)
 {
     QGeoTileSpec emptySpec;
 
@@ -453,6 +463,160 @@ QGeoTileSpec QGeoFileTileCache::filenameToTileSpec(const QString &filename)
                     numbers.at(2),
                     numbers.at(3),
                     numbers.at(4));
+}
+
+void QGeoFileTileCache::evictFromDiskCache(QGeoCachedTileDisk *td)
+{
+    QFile::remove(td->filename);
+}
+
+void QGeoFileTileCache::evictFromMemoryCache(QGeoCachedTileMemory * /* tm  */)
+{
+}
+
+QSharedPointer<QGeoCachedTileDisk> QGeoFileTileCache::addToDiskCache(const QGeoTileSpec &spec, const QString &filename)
+{
+    QSharedPointer<QGeoCachedTileDisk> td(new QGeoCachedTileDisk);
+    td->spec = spec;
+    td->filename = filename;
+    td->cache = this;
+
+    int cost = 1;
+    if (costStrategyDisk_ == ByteSize) {
+        QFileInfo fi(filename);
+        cost = fi.size();
+    }
+    diskCache_.insert(spec, td, cost);
+    return td;
+}
+
+bool QGeoFileTileCache::addToDiskCache(const QGeoTileSpec &spec, const QString &filename, const QByteArray &bytes)
+{
+    QSharedPointer<QGeoCachedTileDisk> td(new QGeoCachedTileDisk);
+    td->spec = spec;
+    td->filename = filename;
+    td->cache = this;
+
+    int cost = 1;
+    if (costStrategyDisk_ == ByteSize)
+        cost = bytes.size();
+
+    if (diskCache_.insert(spec, td, cost)) {
+        QFile file(filename);
+        file.open(QIODevice::WriteOnly);
+        file.write(bytes);
+        file.close();
+        return true;
+    }
+    return false;
+}
+
+void QGeoFileTileCache::addToMemoryCache(const QGeoTileSpec &spec, const QByteArray &bytes, const QString &format)
+{
+    if (isTileBogus(bytes))
+        return;
+
+    QSharedPointer<QGeoCachedTileMemory> tm(new QGeoCachedTileMemory);
+    tm->spec = spec;
+    tm->cache = this;
+    tm->bytes = bytes;
+    tm->format = format;
+
+    int cost = 1;
+    if (costStrategyMemory_ == ByteSize)
+        cost = bytes.size();
+    memoryCache_.insert(spec, tm, cost);
+}
+
+QSharedPointer<QGeoTileTexture> QGeoFileTileCache::addToTextureCache(const QGeoTileSpec &spec, const QImage &image)
+{
+    QSharedPointer<QGeoTileTexture> tt(new QGeoTileTexture);
+    tt->spec = spec;
+    tt->image = image;
+
+    int cost = 1;
+    if (costStrategyTexture_ == ByteSize)
+        cost = image.width() * image.height() * image.depth() / 8;
+    textureCache_.insert(spec, tt, cost);
+
+    return tt;
+}
+
+QSharedPointer<QGeoTileTexture> QGeoFileTileCache::getFromMemory(const QGeoTileSpec &spec)
+{
+    QSharedPointer<QGeoTileTexture> tt = textureCache_.object(spec);
+    if (tt)
+        return tt;
+
+    QSharedPointer<QGeoCachedTileMemory> tm = memoryCache_.object(spec);
+    if (tm) {
+        QImage image;
+        if (!image.loadFromData(tm->bytes)) {
+            handleError(spec, QLatin1String("Problem with tile image"));
+            return QSharedPointer<QGeoTileTexture>(0);
+        }
+        QSharedPointer<QGeoTileTexture> tt = addToTextureCache(spec, image);
+        if (tt)
+            return tt;
+    }
+    return QSharedPointer<QGeoTileTexture>();
+}
+
+QSharedPointer<QGeoTileTexture> QGeoFileTileCache::getFromDisk(const QGeoTileSpec &spec)
+{
+    QSharedPointer<QGeoCachedTileDisk> td = diskCache_.object(spec);
+    if (td) {
+        const QString format = QFileInfo(td->filename).suffix();
+        QFile file(td->filename);
+        file.open(QIODevice::ReadOnly);
+        QByteArray bytes = file.readAll();
+        file.close();
+
+        QImage image;
+        // Some tiles from the servers could be valid images but the tile fetcher
+        // might be able to recognize them as tiles that should not be shown.
+        // If that's the case, the tile fetcher should write "NoRetry" inside the file.
+        if (isTileBogus(bytes)) {
+            QSharedPointer<QGeoTileTexture> tt(new QGeoTileTexture);
+            tt->spec = spec;
+            tt->image = image;
+            return tt;
+        }
+
+        // This is a truly invalid image. The fetcher should try again.
+        if (!image.loadFromData(bytes)) {
+            handleError(spec, QLatin1String("Problem with tile image"));
+            return QSharedPointer<QGeoTileTexture>(0);
+        }
+
+        // Converting it here, instead of in each QSGTexture::bind()
+        if (image.format() != QImage::Format_RGB32 && image.format() != QImage::Format_ARGB32_Premultiplied)
+            image = image.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+
+        addToMemoryCache(spec, bytes, format);
+        QSharedPointer<QGeoTileTexture> tt = addToTextureCache(td->spec, image);
+        if (tt)
+            return tt;
+    }
+
+    return QSharedPointer<QGeoTileTexture>();
+}
+
+bool QGeoFileTileCache::isTileBogus(const QByteArray &bytes) const
+{
+    if (bytes.size() == 7 && bytes == QByteArrayLiteral("NoRetry"))
+        return true;
+    return false;
+}
+
+QString QGeoFileTileCache::tileSpecToFilename(const QGeoTileSpec &spec, const QString &format, const QString &directory) const
+{
+    return tileSpecToFilenameDefault(spec, format, directory);
+}
+
+QGeoTileSpec QGeoFileTileCache::filenameToTileSpec(const QString &filename) const
+{
+    return filenameToTileSpecDefault(filename);
 }
 
 QString QGeoFileTileCache::directory() const

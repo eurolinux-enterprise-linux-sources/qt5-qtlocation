@@ -12,4 +12,5 @@ OTHER_FILES += \
 
 PLUGIN_TYPE = position
 PLUGIN_CLASS_NAME = QGeoPositionInfoSourceFactoryWinRT
+msvc:!winrt: LIBS += runtimeobject.lib
 load(qt_plugin)

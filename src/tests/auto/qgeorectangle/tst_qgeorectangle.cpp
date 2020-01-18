@@ -1,31 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -76,6 +71,9 @@ private slots:
     void center();
     void center_data();
 
+    void boundingGeoRectangle();
+    void boundingGeoRectangle_data();
+
     void containsCoord();
     void containsCoord_data();
 
@@ -88,8 +86,8 @@ private slots:
     void unite();
     void unite_data();
 
-    void extendShape();
-    void extendShape_data();
+    void extendRectangle();
+    void extendRectangle_data();
 
     void areaComparison();
     void areaComparison_data();
@@ -962,6 +960,28 @@ void tst_QGeoRectangle::center_data()
                                 QGeoCoordinate(-90.0, -170.0));
 }
 
+void tst_QGeoRectangle::boundingGeoRectangle_data()
+{
+    QTest::addColumn<QGeoRectangle>("rectangle");
+
+    QGeoRectangle b1(QGeoCoordinate(70, 30), QGeoCoordinate(30, 70));
+    QGeoRectangle b2(QGeoCoordinate(70, 150), QGeoCoordinate(30, -170));
+    QGeoRectangle b3(QGeoCoordinate(90, 30), QGeoCoordinate(50, 70));
+    QGeoRectangle b4(QGeoCoordinate(-50, 30), QGeoCoordinate(-90, 70));
+
+    QTest::newRow("Box 1") << b1;
+    QTest::newRow("Box 2") << b2;
+    QTest::newRow("Box 3") << b3;
+    QTest::newRow("Box 4") << b4;
+}
+
+void tst_QGeoRectangle::boundingGeoRectangle()
+{
+    QFETCH(QGeoRectangle, rectangle);
+
+    QGeoRectangle box = rectangle.boundingGeoRectangle();
+    QCOMPARE(box, rectangle);
+}
 
 void tst_QGeoRectangle::containsCoord()
 {
@@ -1774,14 +1794,14 @@ void tst_QGeoRectangle::translate_data()
             << 20.0
             << 20.0
             << QGeoRectangle(QGeoCoordinate(90.0, -10.0),
-                               QGeoCoordinate(40.0, 50.0));
+                               QGeoCoordinate(30.0, 50.0));
 
     QTest::newRow("non wrapping -> south clip")
             << QGeoRectangle(QGeoCoordinate(-20.0, -30.0),
                                QGeoCoordinate(-80.0, 30.0))
             << -20.0
             << 20.0
-            << QGeoRectangle(QGeoCoordinate(-40.0, -10.0),
+            << QGeoRectangle(QGeoCoordinate(-30.0, -10.0),
                                QGeoCoordinate(-90.0, 50.0));
 
     QTest::newRow("wrapping -> non wrapping")
@@ -1806,14 +1826,14 @@ void tst_QGeoRectangle::translate_data()
             << 20.0
             << 20.0
             << QGeoRectangle(QGeoCoordinate(90.0, 150.0),
-                               QGeoCoordinate(40.0, -150.0));
+                               QGeoCoordinate(30.0, -150.0));
 
     QTest::newRow("wrapping -> south clip")
             << QGeoRectangle(QGeoCoordinate(-20.0, 130.0),
                                QGeoCoordinate(-80.0, -170.0))
             << -20.0
             << 20.0
-            << QGeoRectangle(QGeoCoordinate(-40.0, 150.0),
+            << QGeoRectangle(QGeoCoordinate(-30.0, 150.0),
                                QGeoCoordinate(-90.0, -150.0));
 }
 
@@ -2206,17 +2226,17 @@ void tst_QGeoRectangle::unite_data()
 }
 
 
-void tst_QGeoRectangle::extendShape()
+void tst_QGeoRectangle::extendRectangle()
 {
     QFETCH(QGeoRectangle, box);
     QFETCH(QGeoCoordinate, coord);
     QFETCH(QGeoRectangle, out);
 
-    box.extendShape(coord);
+    box.extendRectangle(coord);
     QCOMPARE(box, out);
 }
 
-void tst_QGeoRectangle::extendShape_data()
+void tst_QGeoRectangle::extendRectangle_data()
 {
     QTest::addColumn<QGeoRectangle>("box");
     QTest::addColumn<QGeoCoordinate>("coord");

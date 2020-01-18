@@ -34,40 +34,50 @@
 **
 ****************************************************************************/
 
-#include "qdeclarativegeoserviceprovider_p.h"
-#include "qdeclarativegeomap_p.h"
+#include <QtLocation/private/qdeclarativegeoserviceprovider_p.h>
+#include <QtLocation/private/qdeclarativegeomap_p.h>
 
-#include "qdeclarativegeoroute_p.h"
-#include "qdeclarativegeoroutemodel_p.h"
-#include "qdeclarativegeocodemodel_p.h"
-#include "qdeclarativegeomaneuver_p.h"
-#include "qdeclarativegeomapquickitem_p.h"
-#include "qdeclarativegeomapitemview_p.h"
-#include "qdeclarativegeomaptype_p.h"
-#include "qdeclarativerectanglemapitem_p.h"
-#include "qdeclarativecirclemapitem_p.h"
-#include "qdeclarativeroutemapitem_p.h"
-#include "qdeclarativepolylinemapitem_p.h"
-#include "qdeclarativepolygonmapitem_p.h"
+#include <QtLocation/private/qdeclarativegeoroute_p.h>
+#include <QtLocation/private/qdeclarativegeoroutemodel_p.h>
+#include <QtLocation/private/qdeclarativegeocodemodel_p.h>
+#include <QtLocation/private/qdeclarativegeomaneuver_p.h>
+#include <QtLocation/private/qdeclarativegeomapitembase_p.h>
+#include <QtLocation/private/qdeclarativegeomapquickitem_p.h>
+#include <QtLocation/private/qdeclarativegeomapitemview_p.h>
+#include <QtLocation/private/qdeclarativegeomaptype_p.h>
+#include <QtLocation/private/qdeclarativerectanglemapitem_p.h>
+#include <QtLocation/private/qdeclarativecirclemapitem_p.h>
+#include <QtLocation/private/qdeclarativeroutemapitem_p.h>
+#include <QtLocation/private/qdeclarativepolylinemapitem_p.h>
+#include <QtLocation/private/qdeclarativepolygonmapitem_p.h>
+#include <QtLocation/private/qdeclarativegeomapparameter_p.h>
+#include <QtLocation/private/qdeclarativegeomapcopyrightsnotice_p.h>
+#include <QtLocation/private/qdeclarativegeomapitemgroup_p.h>
 
 //Place includes
-#include "qdeclarativecategory_p.h"
-#include "qdeclarativeplace_p.h"
-#include "qdeclarativeplaceattribute_p.h"
-#include "qdeclarativeplaceicon_p.h"
-#include "qdeclarativeratings_p.h"
-#include "qdeclarativesupplier_p.h"
-#include "qdeclarativeplaceuser_p.h"
-#include "qdeclarativecontactdetail_p.h"
+#include <QtLocation/private/qdeclarativecategory_p.h>
+#include <QtLocation/private/qdeclarativeplace_p.h>
+#include <QtLocation/private/qdeclarativeplaceattribute_p.h>
+#include <QtLocation/private/qdeclarativeplaceicon_p.h>
+#include <QtLocation/private/qdeclarativeratings_p.h>
+#include <QtLocation/private/qdeclarativesupplier_p.h>
+#include <QtLocation/private/qdeclarativeplaceuser_p.h>
+#include <QtLocation/private/qdeclarativecontactdetail_p.h>
 
-#include "qdeclarativesupportedcategoriesmodel_p.h"
-#include "qdeclarativesearchresultmodel_p.h"
-#include "qdeclarativesearchsuggestionmodel_p.h"
-#include "error_messages.h"
+#include <QtLocation/private/qdeclarativesupportedcategoriesmodel_p.h>
+#include <QtLocation/private/qdeclarativesearchresultmodel_p.h>
+#include <QtLocation/private/qdeclarativesearchsuggestionmodel_p.h>
 
 #include <QtQml/qqmlextensionplugin.h>
 
 #include <QtCore/QDebug>
+
+static void initResources()
+{
+#ifdef QT_STATIC
+    Q_INIT_RESOURCE(qmake_QtLocation);
+#endif
+}
 
 QT_BEGIN_NAMESPACE
 
@@ -76,10 +86,11 @@ class QtLocationDeclarativeModule: public QQmlExtensionPlugin
 {
     Q_OBJECT
 
-    Q_PLUGIN_METADATA(IID "org.qt-project.Qt.QQmlExtensionInterface/1.0"
+    Q_PLUGIN_METADATA(IID QQmlExtensionInterface_iid
                       FILE "plugin.json")
 
 public:
+    QtLocationDeclarativeModule(QObject *parent = 0) : QQmlExtensionPlugin(parent) { initResources(); }
     virtual void registerTypes(const char *uri)
     {
         if (QLatin1String(uri) == QLatin1String("QtLocation")) {
@@ -145,9 +156,6 @@ public:
             // Introduction of 5.3 version; existing 5.0 exports automatically become available under 5.3 as well
             // 5.3 is committed QML API despite missing release of QtLocation 5.3
 
-            // Register the 5.5 types
-            // Implicitly registers 5.3 & 5.4
-
             minor = 5;
             //TODO: this is broken QTBUG-50990
             qmlRegisterUncreatableType<QDeclarativeGeoMapType, 1>(uri, major, minor, "MapType",
@@ -157,6 +165,15 @@ public:
             qmlRegisterUncreatableType<QQuickGeoMapGestureArea, 1>(uri, major, minor, "MapGestureArea",
                                         QStringLiteral("(Map)GestureArea is not intended instantiable by developer."));
 
+            // Register the 5.8 types
+            minor = 8;
+            qmlRegisterType<QDeclarativeGeoManeuver>(uri, major, minor, "RouteManeuver");
+
+            // Register the 5.9 types
+            minor = 9;
+            qmlRegisterType<QDeclarativeGeoMapParameter>(uri, major, minor, "MapParameter");
+            qmlRegisterType<QDeclarativeGeoMapCopyrightNotice>(uri, major, minor, "MapCopyrightNotice");
+            qmlRegisterType<QDeclarativeGeoMapItemGroup>(uri, major, minor, "MapItemGroup");
 
             //registrations below are version independent
             qRegisterMetaType<QPlaceCategory>();

@@ -1,31 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -57,8 +52,9 @@ tst_MapType::tst_MapType() {}
 
 void tst_MapType::constructorTest()
 {
+    const QByteArray pluginName = "tst_MapType";
     QGeoMapType *testObjPtr = new QGeoMapType(QGeoMapType::StreetMap, QStringLiteral("street map"),
-                                              QStringLiteral("map description"), true, true, 1);
+                                              QStringLiteral("map description"), true, true, 1, pluginName);
     QVERIFY(testObjPtr);
     QCOMPARE(testObjPtr->style(), QGeoMapType::StreetMap);
     QCOMPARE(testObjPtr->name(), QStringLiteral("street map"));
@@ -66,6 +62,7 @@ void tst_MapType::constructorTest()
     QVERIFY(testObjPtr->mobile());
     QVERIFY(testObjPtr->night());
     QCOMPARE(testObjPtr->mapId(), 1);
+    QCOMPARE(testObjPtr->pluginName(), pluginName);
     delete testObjPtr;
 
     testObjPtr = new QGeoMapType();
@@ -75,6 +72,7 @@ void tst_MapType::constructorTest()
     QVERIFY2(!testObjPtr->mobile(), "Wrong default value");
     QVERIFY2(!testObjPtr->night(), "Wrong default value");
     QCOMPARE(testObjPtr->mapId(), 0);
+    QCOMPARE(testObjPtr->pluginName(), QByteArrayLiteral(""));
     delete testObjPtr;
 }
 
@@ -84,50 +82,58 @@ void tst_MapType::comparison_data()
     QTest::addColumn<QGeoMapType>("type2");
     QTest::addColumn<bool>("expected");
 
+    const QByteArray pluginName = "tst_MapType";
+
     QTest::newRow("null") << QGeoMapType() << QGeoMapType() << true;
 
     QTest::newRow("equal") << QGeoMapType(QGeoMapType::StreetMap, QStringLiteral("street name"),
-                                          QStringLiteral("street desc"), false, false, 42)
+                                          QStringLiteral("street desc"), false, false, 42, pluginName)
                            << QGeoMapType(QGeoMapType::StreetMap, QStringLiteral("street name"),
-                                          QStringLiteral("street desc"), false, false, 42)
+                                          QStringLiteral("street desc"), false, false, 42, pluginName)
                            << true;
 
     QTest::newRow("style") << QGeoMapType(QGeoMapType::StreetMap, QStringLiteral("street name"),
-                                          QStringLiteral("street desc"), false, false, 42)
+                                          QStringLiteral("street desc"), false, false, 42, pluginName)
                            << QGeoMapType(QGeoMapType::TerrainMap, QStringLiteral("street name"),
-                                          QStringLiteral("street desc"), false, false, 42)
+                                          QStringLiteral("street desc"), false, false, 42, pluginName)
                            << false;
 
     QTest::newRow("name") << QGeoMapType(QGeoMapType::StreetMap, QStringLiteral("street name"),
-                                         QStringLiteral("street desc"), false, false, 42)
+                                         QStringLiteral("street desc"), false, false, 42, pluginName)
                           << QGeoMapType(QGeoMapType::StreetMap, QStringLiteral("different name"),
-                                         QStringLiteral("street desc"), false, false, 42)
+                                         QStringLiteral("street desc"), false, false, 42, pluginName)
                           << false;
 
     QTest::newRow("description") << QGeoMapType(QGeoMapType::StreetMap,
                                                 QStringLiteral("street name"),
-                                                QStringLiteral("street desc"), false, false, 42)
+                                                QStringLiteral("street desc"), false, false, 42, pluginName)
                                  << QGeoMapType(QGeoMapType::StreetMap,
                                                 QStringLiteral("street name"),
-                                                QStringLiteral("different desc"), false, false, 42)
+                                                QStringLiteral("different desc"), false, false, 42, pluginName)
                                  << false;
 
     QTest::newRow("mobile") << QGeoMapType(QGeoMapType::StreetMap, QStringLiteral("street name"),
-                                           QStringLiteral("street desc"), false, false, 42)
+                                           QStringLiteral("street desc"), false, false, 42, pluginName)
                             << QGeoMapType(QGeoMapType::StreetMap, QStringLiteral("street name"),
-                                           QStringLiteral("street desc"), true, false, 42)
+                                           QStringLiteral("street desc"), true, false, 42, pluginName)
                             << false;
 
     QTest::newRow("night") << QGeoMapType(QGeoMapType::StreetMap, QStringLiteral("street name"),
-                                           QStringLiteral("street desc"), false, false, 42)
+                                           QStringLiteral("street desc"), false, false, 42, pluginName)
                             << QGeoMapType(QGeoMapType::StreetMap, QStringLiteral("street name"),
-                                           QStringLiteral("street desc"), false, true, 42)
+                                           QStringLiteral("street desc"), false, true, 42, pluginName)
                             << false;
 
     QTest::newRow("id") << QGeoMapType(QGeoMapType::StreetMap, QStringLiteral("street name"),
-                                       QStringLiteral("street desc"), false, false, 42)
+                                       QStringLiteral("street desc"), false, false, 42, pluginName)
                         << QGeoMapType(QGeoMapType::StreetMap, QStringLiteral("street name"),
-                                       QStringLiteral("street desc"), false, false, 99)
+                                       QStringLiteral("street desc"), false, false, 99, pluginName)
+                        << false;
+
+    QTest::newRow("plugin_name") << QGeoMapType(QGeoMapType::StreetMap, QStringLiteral("street name"),
+                                       QStringLiteral("street desc"), false, false, 42, pluginName)
+                        << QGeoMapType(QGeoMapType::StreetMap, QStringLiteral("street name"),
+                                       QStringLiteral("street desc"), false, false, 42, QByteArrayLiteral("abc"))
                         << false;
 }
 

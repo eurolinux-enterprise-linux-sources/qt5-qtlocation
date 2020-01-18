@@ -150,9 +150,10 @@ void QGeoMappingManagerEngine::setSupportedMapTypes(const QList<QGeoMapType> &su
     emit supportedMapTypesChanged();
 }
 
-QGeoCameraCapabilities QGeoMappingManagerEngine::cameraCapabilities()
+QGeoCameraCapabilities QGeoMappingManagerEngine::cameraCapabilities(int mapId) const
 {
-    Q_D(QGeoMappingManagerEngine);
+    Q_UNUSED(mapId)
+    Q_D(const QGeoMappingManagerEngine);
     return d->capabilities_;
 }
 
@@ -202,7 +203,5 @@ QGeoMappingManagerEnginePrivate::QGeoMappingManagerEnginePrivate()
       initialized(false) {}
 
 QGeoMappingManagerEnginePrivate::~QGeoMappingManagerEnginePrivate() {}
-
-#include "moc_qgeomappingmanagerengine_p.cpp"
 
 QT_END_NAMESPACE

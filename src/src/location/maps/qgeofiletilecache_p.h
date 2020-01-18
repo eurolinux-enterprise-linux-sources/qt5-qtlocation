@@ -47,7 +47,7 @@
 // We mean it.
 //
 
-#include <QtLocation/qlocationglobal.h>
+#include <QtLocation/private/qlocationglobal_p.h>
 
 #include <QObject>
 #include <QCache>
@@ -88,14 +88,14 @@ public:
 
 /* Custom eviction policy for the disk cache, to avoid deleting all the files
  * when the application closes */
-class QCache3QTileEvictionPolicy : public QCache3QDefaultEvictionPolicy<QGeoTileSpec,QGeoCachedTileDisk>
+class Q_LOCATION_PRIVATE_EXPORT QCache3QTileEvictionPolicy : public QCache3QDefaultEvictionPolicy<QGeoTileSpec,QGeoCachedTileDisk>
 {
 protected:
     void aboutToBeRemoved(const QGeoTileSpec &key, QSharedPointer<QGeoCachedTileDisk> obj);
     void aboutToBeEvicted(const QGeoTileSpec &key, QSharedPointer<QGeoCachedTileDisk> obj);
 };
 
-class Q_LOCATION_EXPORT QGeoFileTileCache : public QAbstractGeoTileCache
+class Q_LOCATION_PRIVATE_EXPORT QGeoFileTileCache : public QAbstractGeoTileCache
 {
     Q_OBJECT
 public:
@@ -116,6 +116,14 @@ public:
     int minTextureUsage() const Q_DECL_OVERRIDE;
     int textureUsage() const Q_DECL_OVERRIDE;
     void clearAll() Q_DECL_OVERRIDE;
+    void clearMapId(const int mapId);
+    void setCostStrategyDisk(CostStrategy costStrategy) Q_DECL_OVERRIDE;
+    CostStrategy costStrategyDisk() const Q_DECL_OVERRIDE;
+    void setCostStrategyMemory(CostStrategy costStrategy) Q_DECL_OVERRIDE;
+    CostStrategy costStrategyMemory() const Q_DECL_OVERRIDE;
+    void setCostStrategyTexture(CostStrategy costStrategy) Q_DECL_OVERRIDE;
+    CostStrategy costStrategyTexture() const Q_DECL_OVERRIDE;
+
 
     QSharedPointer<QGeoTileTexture> get(const QGeoTileSpec &spec) Q_DECL_OVERRIDE;
 
@@ -126,20 +134,28 @@ public:
     void insert(const QGeoTileSpec &spec,
                 const QByteArray &bytes,
                 const QString &format,
-                QGeoTiledMappingManagerEngine::CacheAreas areas = QGeoTiledMappingManagerEngine::AllCaches) Q_DECL_OVERRIDE;
+                QAbstractGeoTileCache::CacheAreas areas = QAbstractGeoTileCache::AllCaches) Q_DECL_OVERRIDE;
 
-private:
+    static QString tileSpecToFilenameDefault(const QGeoTileSpec &spec, const QString &format, const QString &directory);
+    static QGeoTileSpec filenameToTileSpecDefault(const QString &filename);
+
+protected:
+    void init() Q_DECL_OVERRIDE;
     void printStats() Q_DECL_OVERRIDE;
     void loadTiles();
 
     QString directory() const;
 
     QSharedPointer<QGeoCachedTileDisk> addToDiskCache(const QGeoTileSpec &spec, const QString &filename);
-    QSharedPointer<QGeoCachedTileMemory> addToMemoryCache(const QGeoTileSpec &spec, const QByteArray &bytes, const QString &format);
+    bool addToDiskCache(const QGeoTileSpec &spec, const QString &filename, const QByteArray &bytes);
+    void addToMemoryCache(const QGeoTileSpec &spec, const QByteArray &bytes, const QString &format);
     QSharedPointer<QGeoTileTexture> addToTextureCache(const QGeoTileSpec &spec, const QImage &image);
+    QSharedPointer<QGeoTileTexture> getFromMemory(const QGeoTileSpec &spec);
+    QSharedPointer<QGeoTileTexture> getFromDisk(const QGeoTileSpec &spec);
 
-    static QString tileSpecToFilename(const QGeoTileSpec &spec, const QString &format, const QString &directory);
-    static QGeoTileSpec filenameToTileSpec(const QString &filename);
+    virtual bool isTileBogus(const QByteArray &bytes) const;
+    virtual QString tileSpecToFilename(const QGeoTileSpec &spec, const QString &format, const QString &directory) const;
+    virtual QGeoTileSpec filenameToTileSpec(const QString &filename) const;
 
     QCache3Q<QGeoTileSpec, QGeoCachedTileDisk, QCache3QTileEvictionPolicy > diskCache_;
     QCache3Q<QGeoTileSpec, QGeoCachedTileMemory > memoryCache_;
@@ -149,6 +165,12 @@ private:
 
     int minTextureUsage_;
     int extraTextureUsage_;
+    CostStrategy costStrategyDisk_;
+    CostStrategy costStrategyMemory_;
+    CostStrategy costStrategyTexture_;
+    bool isDiskCostSet_;
+    bool isMemoryCostSet_;
+    bool isTextureCostSet_;
 };
 
 QT_END_NAMESPACE

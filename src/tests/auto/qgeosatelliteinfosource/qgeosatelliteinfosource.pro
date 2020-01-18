@@ -10,5 +10,3 @@ HEADERS += testqgeosatelliteinfosource_p.h \
             ../utils/qlocationtestutils_p.h
 
 QT += positioning testlib
-
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

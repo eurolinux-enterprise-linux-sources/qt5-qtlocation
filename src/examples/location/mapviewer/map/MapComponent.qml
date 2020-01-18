@@ -39,7 +39,7 @@
 ****************************************************************************/
 import QtQuick 2.5
 import QtQuick.Controls 1.4
-import QtLocation 5.6
+import QtLocation 5.9
 import QtPositioning 5.5
 import "../helper.js" as Helper
 
@@ -61,6 +61,7 @@ Map {
     property alias routeQuery: routeQuery
     property alias routeModel: routeModel
     property alias geocodeModel: geocodeModel
+    property alias slidersExpanded: sliders.expanded
 
     signal showGeocodeInfo()
     signal geocodeFinished()
@@ -269,7 +270,7 @@ Map {
 
 //! [mapnavigation]
     // Enable pan, flick, and pinch gestures to zoom in and out
-    gesture.acceptedGestures: MapGestureArea.PanGesture | MapGestureArea.FlickGesture | MapGestureArea.PinchGesture
+    gesture.acceptedGestures: MapGestureArea.PanGesture | MapGestureArea.FlickGesture | MapGestureArea.PinchGesture | MapGestureArea.RotationGesture | MapGestureArea.TiltGesture
     gesture.flickDeceleration: 3000
     gesture.enabled: true
 //! [mapnavigation]
@@ -364,21 +365,11 @@ Map {
         anchorPoint: Qt.point(-poiTheQtComapny.sourceItem.width * 0.5,poiTheQtComapny.sourceItem.height * 1.5)
     }
 
-
-    Slider {
-        id: zoomSlider;
+    MapSliders {
+        id: sliders
         z: map.z + 3
-        minimumValue: map.minimumZoomLevel;
-        maximumValue: map.maximumZoomLevel;
-        anchors.margins: 10
-        anchors.bottom: scale.top
-        anchors.top: parent.top
-        anchors.right: parent.right
-        orientation : Qt.Vertical
-        value: map.zoomLevel
-        onValueChanged: {
-            map.zoomLevel = value
-        }
+        mapSource: map
+        edge: Qt.LeftEdge
     }
 
     Item {
@@ -613,9 +604,9 @@ Map {
             var mouseGeoPos = map.toCoordinate(Qt.point(mouse.x, mouse.y));
             var preZoomPoint = map.fromCoordinate(mouseGeoPos, false);
             if (mouse.button === Qt.LeftButton) {
-                map.zoomLevel++;
+                map.zoomLevel = Math.floor(map.zoomLevel + 1)
             } else if (mouse.button === Qt.RightButton) {
-                map.zoomLevel--;
+                map.zoomLevel = Math.floor(map.zoomLevel - 1)
             }
             var postZoomPoint = map.fromCoordinate(mouseGeoPos, false);
             var dx = postZoomPoint.x - preZoomPoint.x;

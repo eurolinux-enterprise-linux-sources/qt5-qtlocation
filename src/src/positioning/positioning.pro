@@ -1,5 +1,10 @@
 TARGET = QtPositioning
 QT = core-private
+CONFIG += simd optimize_full
+
+#INCLUDEPATH += ../3rdparty/poly2tri
+INCLUDEPATH += ../3rdparty/clipper
+INCLUDEPATH += ../3rdparty/clip2tri
 
 QMAKE_DOCS = $$PWD/doc/qtpositioning.qdocconf
 OTHER_FILES += doc/src/*.qdoc   # show .qdoc files in Qt Creator
@@ -32,7 +37,8 @@ PUBLIC_HEADERS += \
                     qgeosatelliteinfosource.h \
                     qnmeapositioninfosource.h \
                     qgeopositioninfosourcefactory.h \
-                    qpositioningglobal.h
+                    qpositioningglobal.h \
+                    qgeopath.h \
 
 PRIVATE_HEADERS += \
                     qgeoaddress_p.h \
@@ -48,9 +54,12 @@ PRIVATE_HEADERS += \
                     qdeclarativegeolocation_p.h \
                     qdoublevector2d_p.h \
                     qdoublevector3d_p.h \
-                    qgeoprojection_p.h \
+                    qwebmercator_p.h \
                     qpositioningglobal_p.h \
-                    qlocationdata_simulator_p.h
+                    qlocationdata_simulator_p.h \
+                    qdoublematrix4x4_p.h \
+                    qgeopath_p.h \
+                    qclipperutils_p.h
 
 SOURCES += \
             qgeoaddress.cpp \
@@ -72,10 +81,15 @@ SOURCES += \
             qdeclarativegeolocation.cpp \
             qdoublevector2d.cpp \
             qdoublevector3d.cpp \
-            qgeoprojection.cpp \
-            qlocationdata_simulator.cpp
+            qgeopath.cpp \
+            qlocationdata_simulator.cpp \
+            qwebmercator.cpp \
+            qdoublematrix4x4.cpp \
+            qclipperutils.cpp
 
 HEADERS += $$PUBLIC_HEADERS $$PRIVATE_HEADERS
 
 
 load(qt_module)
+
+LIBS_PRIVATE += -L$$MODULE_BASE_OUTDIR/lib -lclip2tri$$qtPlatformTargetSuffix()

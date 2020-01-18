@@ -37,8 +37,9 @@
 #include "qgeomap_p.h"
 #include "qgeomap_p_p.h"
 #include "qgeocameracapabilities_p.h"
-#include "qgeomapcontroller_p.h"
 #include "qgeomappingmanagerengine_p.h"
+#include "qdeclarativegeomapitembase_p.h"
+#include <QDebug>
 
 QT_BEGIN_NAMESPACE
 
@@ -49,34 +50,35 @@ QGeoMap::QGeoMap(QGeoMapPrivate &dd, QObject *parent)
 
 QGeoMap::~QGeoMap()
 {
+    clearParameters();
 }
 
-QGeoMapController *QGeoMap::mapController()
+void QGeoMap::setViewportSize(const QSize& size)
 {
     Q_D(QGeoMap);
-    if (!d->m_controller)
-        d->m_controller = new QGeoMapController(this);
-    return d->m_controller;
+    if (size == d->m_viewportSize)
+        return;
+    d->m_viewportSize = size;
+    d->m_geoProjection->setViewportSize(size);
+    d->changeViewportSize(size);
 }
 
-void QGeoMap::resize(int width, int height)
-{
-    Q_D(QGeoMap);
-    d->resize(width, height);
-    // always emit this signal to trigger items to redraw
-    emit cameraDataChanged(d->m_cameraData);
-}
-
-int QGeoMap::width() const
+QSize QGeoMap::viewportSize() const
 {
     Q_D(const QGeoMap);
-    return d->m_width;
+    return d->m_viewportSize;
 }
 
-int QGeoMap::height() const
+int QGeoMap::viewportWidth() const
 {
     Q_D(const QGeoMap);
-    return d->m_height;
+    return d->m_viewportSize.width();
+}
+
+int QGeoMap::viewportHeight() const
+{
+    Q_D(const QGeoMap);
+    return d->m_viewportSize.height();
 }
 
 void QGeoMap::setCameraData(const QGeoCameraData &cameraData)
@@ -84,12 +86,16 @@ void QGeoMap::setCameraData(const QGeoCameraData &cameraData)
     Q_D(QGeoMap);
     if (cameraData == d->m_cameraData)
         return;
-
-    d->setCameraData(cameraData);
-
-    update();
-
+    d->m_cameraData = cameraData;
+    d->m_geoProjection->setCameraData(cameraData);
+    d->changeCameraData(cameraData);
     emit cameraDataChanged(d->m_cameraData);
+}
+
+void QGeoMap::setCameraCapabilities(const QGeoCameraCapabilities &cameraCapabilities)
+{
+    Q_D(QGeoMap);
+    d->setCameraCapabilities(cameraCapabilities);
 }
 
 QGeoCameraData QGeoMap::cameraData() const
@@ -98,19 +104,15 @@ QGeoCameraData QGeoMap::cameraData() const
     return d->m_cameraData;
 }
 
-void QGeoMap::update()
-{
-    emit updateRequired();
-}
-
 void QGeoMap::setActiveMapType(const QGeoMapType type)
 {
     Q_D(QGeoMap);
+    if (type == d->m_activeMapType)
+        return;
     d->m_activeMapType = type;
+    d->setCameraCapabilities(d->m_engine->cameraCapabilities(type.mapId())); // emits
     d->changeActiveMapType(type);
-    d->setCameraData(d->m_cameraData);
     emit activeMapTypeChanged();
-    update();
 }
 
 const QGeoMapType QGeoMap::activeMapType() const
@@ -119,13 +121,40 @@ const QGeoMapType QGeoMap::activeMapType() const
     return d->m_activeMapType;
 }
 
-QGeoCameraCapabilities QGeoMap::cameraCapabilities()
+double QGeoMap::minimumZoom() const
 {
     Q_D(const QGeoMap);
-    if (!d->m_engine.isNull())
-        return d->m_engine->cameraCapabilities();
-    else
-        return QGeoCameraCapabilities();
+    return d->m_geoProjection->minimumZoom();
+}
+
+double QGeoMap::maximumCenterLatitudeAtZoom(const QGeoCameraData &cameraData) const
+{
+    Q_D(const QGeoMap);
+    return d->m_geoProjection->maximumCenterLatitudeAtZoom(cameraData);
+}
+
+double QGeoMap::mapWidth() const
+{
+    Q_D(const QGeoMap);
+    return d->m_geoProjection->mapWidth();
+}
+
+double QGeoMap::mapHeight() const
+{
+    Q_D(const QGeoMap);
+    return d->m_geoProjection->mapHeight();
+}
+
+const QGeoProjection &QGeoMap::geoProjection() const
+{
+    Q_D(const QGeoMap);
+    return *(d->m_geoProjection);
+}
+
+QGeoCameraCapabilities QGeoMap::cameraCapabilities() const
+{
+    Q_D(const QGeoMap);
+    return d->m_cameraCapabilities;
 }
 
 void QGeoMap::prefetchData()
@@ -138,70 +167,124 @@ void QGeoMap::clearData()
 
 }
 
-QGeoMapPrivate::QGeoMapPrivate(QGeoMappingManagerEngine *engine)
+void QGeoMap::addParameter(QGeoMapParameter *param)
+{
+    Q_D(QGeoMap);
+    if (param && !d->m_mapParameters.contains(param)) {
+        d->m_mapParameters.append(param);
+        d->addParameter(param);
+    }
+}
+
+void QGeoMap::removeParameter(QGeoMapParameter *param)
+{
+    Q_D(QGeoMap);
+    if (param && d->m_mapParameters.contains(param)) {
+        d->removeParameter(param);
+        d->m_mapParameters.removeOne(param);
+    }
+}
+
+void QGeoMap::clearParameters()
+{
+    Q_D(QGeoMap);
+    for (QGeoMapParameter *p : d->m_mapParameters)
+        d->removeParameter(p);
+    d->m_mapParameters.clear();
+}
+
+QGeoMap::ItemTypes QGeoMap::supportedMapItemTypes() const
+{
+    Q_D(const QGeoMap);
+    return d->supportedMapItemTypes();
+}
+
+void QGeoMap::addMapItem(QDeclarativeGeoMapItemBase *item)
+{
+    Q_D(QGeoMap);
+    if (item && !d->m_mapItems.contains(item) && d->supportedMapItemTypes() & item->itemType()) {
+        d->m_mapItems.append(item);
+        d->addMapItem(item);
+    }
+}
+
+void QGeoMap::removeMapItem(QDeclarativeGeoMapItemBase *item)
+{
+    Q_D(QGeoMap);
+    if (item && d->m_mapItems.contains(item)) {
+        d->removeMapItem(item);
+        d->m_mapItems.removeOne(item);
+    }
+}
+
+void QGeoMap::clearMapItems()
+{
+    Q_D(QGeoMap);
+    for (QDeclarativeGeoMapItemBase *p : d->m_mapItems)
+        d->removeMapItem(p);
+    d->m_mapItems.clear();
+}
+
+QString QGeoMap::copyrightsStyleSheet() const
+{
+    return QStringLiteral("#copyright-root { background: rgba(255, 255, 255, 128) }");
+}
+
+QGeoMapPrivate::QGeoMapPrivate(QGeoMappingManagerEngine *engine, QGeoProjection *geoProjection)
     : QObjectPrivate(),
-      m_width(0),
-      m_height(0),
-      m_aspectRatio(0.0),
+      m_geoProjection(geoProjection),
       m_engine(engine),
-      m_controller(0),
       m_activeMapType(QGeoMapType())
 {
+    // Setting the default camera caps without emitting anything
+    if (engine)
+        m_cameraCapabilities = m_engine->cameraCapabilities(m_activeMapType.mapId());
 }
 
 QGeoMapPrivate::~QGeoMapPrivate()
 {
-    // controller_ is a child of map_, don't need to delete it here
-
-    // TODO map items are not deallocated!
-    // However: how to ensure this is done in rendering thread?
+    if (m_geoProjection)
+        delete m_geoProjection;
 }
 
-void QGeoMapPrivate::setCameraData(const QGeoCameraData &cameraData)
+void QGeoMapPrivate::setCameraCapabilities(const QGeoCameraCapabilities &cameraCapabilities)
 {
-    QGeoCameraData oldCameraData = m_cameraData;
-    m_cameraData = cameraData;
-
-    if (!m_engine.isNull()) {
-        QGeoCameraCapabilities capabilities = m_engine->cameraCapabilities();
-        if (m_cameraData.zoomLevel() < capabilities.minimumZoomLevel())
-            m_cameraData.setZoomLevel(capabilities.minimumZoomLevel());
-
-        if (m_cameraData.zoomLevel() > capabilities.maximumZoomLevel())
-            m_cameraData.setZoomLevel(capabilities.maximumZoomLevel());
-
-        if (!capabilities.supportsBearing())
-            m_cameraData.setBearing(0.0);
-
-        if (capabilities.supportsTilting()) {
-            if (m_cameraData.tilt() < capabilities.minimumTilt())
-                m_cameraData.setTilt(capabilities.minimumTilt());
-
-            if (m_cameraData.tilt() > capabilities.maximumTilt())
-                m_cameraData.setTilt(capabilities.maximumTilt());
-        } else {
-            m_cameraData.setTilt(0.0);
-        }
-
-        if (!capabilities.supportsRolling())
-            m_cameraData.setRoll(0.0);
-    }
-
-    // Do not call this expensive function if the width is 0, since it will get called
-    // anyway when it is resized to a width > 0.
-    // this is mainly an optimization to the initialization of the geomap, which would otherwise
-    // call changeCameraData four or more times
-    if (m_width > 0)
-        changeCameraData(oldCameraData);
+    Q_Q(QGeoMap);
+    if (m_cameraCapabilities == cameraCapabilities)
+        return;
+    QGeoCameraCapabilities oldCaps = m_cameraCapabilities;
+    m_cameraCapabilities = cameraCapabilities;
+    emit q->cameraCapabilitiesChanged(oldCaps);
 }
 
-void QGeoMapPrivate::resize(int width, int height)
+const QGeoCameraCapabilities &QGeoMapPrivate::cameraCapabilities() const
 {
-    m_width = width;
-    m_height = height;
-    m_aspectRatio = 1.0 * m_width / m_height;
-    mapResized(width, height);
-    setCameraData(m_cameraData);
+    return m_cameraCapabilities;
+}
+
+void QGeoMapPrivate::addParameter(QGeoMapParameter *param)
+{
+    Q_UNUSED(param)
+}
+
+void QGeoMapPrivate::removeParameter(QGeoMapParameter *param)
+{
+    Q_UNUSED(param)
+}
+
+QGeoMap::ItemTypes QGeoMapPrivate::supportedMapItemTypes() const
+{
+    return QGeoMap::NoItem;
+}
+
+void QGeoMapPrivate::addMapItem(QDeclarativeGeoMapItemBase *item)
+{
+    Q_UNUSED(item)
+}
+
+void QGeoMapPrivate::removeMapItem(QDeclarativeGeoMapItemBase *item)
+{
+    Q_UNUSED(item)
 }
 
 QT_END_NAMESPACE

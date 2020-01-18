@@ -48,7 +48,7 @@
 // We mean it.
 //
 
-#include <QtLocation/qlocationglobal.h>
+#include <QtLocation/private/qlocationglobal_p.h>
 
 #include <QObject>
 
@@ -57,7 +57,7 @@ QT_BEGIN_NAMESPACE
 class QGeoTileSpec;
 class QGeoTiledMapReplyPrivate;
 
-class Q_LOCATION_EXPORT QGeoTiledMapReply : public QObject
+class Q_LOCATION_PRIVATE_EXPORT QGeoTiledMapReply : public QObject
 {
     Q_OBJECT
 
@@ -88,6 +88,7 @@ public:
 
 Q_SIGNALS:
     void finished();
+    void aborted();
     void error(QGeoTiledMapReply::Error error, const QString &errorString = QString());
 
 protected:

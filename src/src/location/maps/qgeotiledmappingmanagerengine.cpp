@@ -53,6 +53,7 @@ QT_BEGIN_NAMESPACE
 
 QGeoTiledMappingManagerEngine::QGeoTiledMappingManagerEngine(QObject *parent)
     : QGeoMappingManagerEngine(parent),
+      m_prefetchStyle(QGeoTiledMap::PrefetchTwoNeighbourLayers),
       d_ptr(new QGeoTiledMappingManagerEnginePrivate)
 {
 }
@@ -268,13 +269,13 @@ int QGeoTiledMappingManagerEngine::tileVersion() const
     return d->m_tileVersion;
 }
 
-QGeoTiledMappingManagerEngine::CacheAreas QGeoTiledMappingManagerEngine::cacheHint() const
+QAbstractGeoTileCache::CacheAreas QGeoTiledMappingManagerEngine::cacheHint() const
 {
     Q_D(const QGeoTiledMappingManagerEngine);
     return d->cacheHint_;
 }
 
-void QGeoTiledMappingManagerEngine::setCacheHint(QGeoTiledMappingManagerEngine::CacheAreas cacheHint)
+void QGeoTiledMappingManagerEngine::setCacheHint(QAbstractGeoTileCache::CacheAreas cacheHint)
 {
     Q_D(QGeoTiledMappingManagerEngine);
     d->cacheHint_ = cacheHint;
@@ -289,6 +290,7 @@ void QGeoTiledMappingManagerEngine::setTileCache(QAbstractGeoTileCache *cache)
     Q_ASSERT_X(!d->tileCache_, Q_FUNC_INFO, "This should be called only once");
     cache->setParent(this);
     d->tileCache_ = cache;
+    d->tileCache_->init();
 }
 
 QAbstractGeoTileCache *QGeoTiledMappingManagerEngine::tileCache()
@@ -297,8 +299,9 @@ QAbstractGeoTileCache *QGeoTiledMappingManagerEngine::tileCache()
     if (!d->tileCache_) {
         QString cacheDirectory;
         if (!managerName().isEmpty())
-            cacheDirectory = QAbstractGeoTileCache::baseCacheDirectory() + managerName();
+            cacheDirectory = QAbstractGeoTileCache::baseLocationCacheDirectory() + managerName();
         d->tileCache_ = new QGeoFileTileCache(cacheDirectory);
+        d->tileCache_->init();
     }
     return d->tileCache_;
 }
@@ -313,7 +316,7 @@ QSharedPointer<QGeoTileTexture> QGeoTiledMappingManagerEngine::getTileTexture(co
 
 QGeoTiledMappingManagerEnginePrivate::QGeoTiledMappingManagerEnginePrivate()
 :   m_tileVersion(-1),
-    cacheHint_(QGeoTiledMappingManagerEngine::AllCaches),
+    cacheHint_(QAbstractGeoTileCache::AllCaches),
     tileCache_(0),
     fetcher_(0)
 {
@@ -322,7 +325,5 @@ QGeoTiledMappingManagerEnginePrivate::QGeoTiledMappingManagerEnginePrivate()
 QGeoTiledMappingManagerEnginePrivate::~QGeoTiledMappingManagerEnginePrivate()
 {
 }
-
-#include "moc_qgeotiledmappingmanagerengine_p.cpp"
 
 QT_END_NAMESPACE

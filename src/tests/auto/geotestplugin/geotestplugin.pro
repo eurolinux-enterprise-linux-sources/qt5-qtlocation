@@ -14,10 +14,10 @@ HEADERS += qgeocodingmanagerengine_test.h \
            qgeotiledmap_test.h \
            qgeotilefetcher_test.h
 
-SOURCES += qgeoserviceproviderplugin_test.cpp
+SOURCES += qgeoserviceproviderplugin_test.cpp \
+           qgeotiledmap_test.cpp
 
 OTHER_FILES += \
     geotestplugin.json \
     place_data.json
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0
 RESOURCES += testdata.qrc

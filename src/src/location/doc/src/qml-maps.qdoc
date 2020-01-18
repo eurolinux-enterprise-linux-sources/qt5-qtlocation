@@ -47,7 +47,7 @@ Map item you can center the map, zoom, pinch and make the item flickable.
 
 The places to be added to the map are
 \l {Maps and Navigation (QML)#Putting Objects on a Map (Map Overlay Objects)}{MapItems}. The item's
-position is defined by a \l {coordinate}{coordinate} which includes latitude,
+position is defined by a \l {coordinate} which includes latitude,
 longitude and altitude. The item is then displayed automatically after it is added to the \l Map.
 
 \section2 Position on map
@@ -112,7 +112,7 @@ snippet we see an \l [QML]{Address} object filled with the desired parameters.
 \snippet mapviewer/mapviewer.qml geocode0
 
 The \l [QML]{Address} is later used in a query for the \l GeocodeModel to
-process and determine the geographical \l [QML]{Coordinate}{coordinates}.
+process and determine the geographical \l [QML]{coordinate}{coordinates}.
 
 \snippet mapviewer/map/MapComponent.qml geocode1
 
@@ -177,13 +177,13 @@ this trip.
 \snippet mapviewer/map/MapComponent.qml routerequest0
 \snippet mapviewer/map/MapComponent.qml routerequest1
 
-The \c routeInfoModel \l {Models and Views in Qt Quick#ListModel}{ListModel} is used to grab the
+The \c routeInfoModel \l {Models and Views in Qt Quick#Models}{ListModel} is used to grab the
 results of the query and construct a suitable list for display.
 \snippet mapviewer/forms/RouteList.qml routeinfomodel0
 \snippet mapviewer/forms/RouteList.qml routeinfomodel1
 \snippet mapviewer/forms/RouteList.qml routeinfomodel3
 
-The \l {Models and Views in Qt Quick#ListModel}{ListModel} \c routeInfoModel can be filled
+The \l {Models and Views in Qt Quick#Models}{ListModel} \c routeInfoModel can be filled
 with values using a code, that loops through the segments extracting the segment length,
 instruction text and distance to the next instruction. The extracted data is formatted
 for display as it is retrieved.

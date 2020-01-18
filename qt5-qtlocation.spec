@@ -14,13 +14,16 @@
 
 Summary: Qt5 - Location component
 Name:    qt5-%{qt_module}
-Version: 5.6.2
+Version: 5.9.2
 Release: 1%{?dist}
 
 # See LGPL_EXCEPTIONS.txt, LICENSE.GPL3, respectively, for exception details
 License: LGPLv2 with exceptions or GPLv3 with exceptions
 Url:     http://www.qt.io
-Source0: http://download.qt.io/official_releases/qt/5.6/%{version}/submodules/%{qt_module}-opensource-src-%{version}.tar.xz
+Source0: http://download.qt.io/official_releases/qt/5.9/%{version}/submodules/%{qt_module}-opensource-src-%{version}.tar.xz
+
+# filter plugin/qml provides
+%global __provides_exclude_from ^(%{_qt5_archdatadir}/qml/.*\\.so|%{_qt5_plugindir}/.*\\.so)$
 
 ## upstreamable patches
 # try to support older glib2 (like el6)
@@ -28,11 +31,17 @@ Patch50: qtlocation-opensource-src-5.6.0-G_VALUE_INIT.patch
 
 BuildRequires: cmake
 BuildRequires: qt5-qtbase-devel >= %{version}
+BuildRequires: qt5-qtbase-private-devel
 BuildRequires: qt5-qtdeclarative-devel >= %{version}
 
-# QtPositioning core-private
-BuildRequires:  qt5-qtbase-private-devel
+BuildRequires: qt5-qtbase-private-devel
 %{?_qt5:Requires: %{_qt5}%{?_isa} = %{_qt5_version}}
+BuildRequires: qt5-qtdeclarative-devel >= 5.9.0
+
+BuildRequires: pkgconfig(zlib)
+BuildRequires: pkgconfig(icu-i18n)
+BuildRequires: pkgconfig(libssl)
+BuildRequires: pkgconfig(libcrypto)
 
 %description
 The Qt Location and Qt Positioning APIs gives developers the ability to
@@ -71,23 +80,20 @@ Requires: %{name}%{?_isa} = %{version}-%{release}
 
 
 %build
-mkdir %{_target_platform}
-pushd %{_target_platform}
-%{qmake_qt5} ..
+%{qmake_qt5}
 
 make %{?_smp_mflags}
 
 %if 0%{?docs}
 make %{?_smp_mflags} docs
 %endif
-popd
 
 
 %install
-make install INSTALL_ROOT=%{buildroot} -C %{_target_platform}
+make install INSTALL_ROOT=%{buildroot}
 
 %if 0%{?docs}
-make install_docs INSTALL_ROOT=%{buildroot} -C %{_target_platform}
+make install_docs INSTALL_ROOT=%{buildroot}
 %endif
 
 ## .prl/.la file love
@@ -112,26 +118,25 @@ popd
 %{_qt5_archdatadir}/qml/QtLocation/
 %{_qt5_plugindir}/geoservices/
 %{_qt5_libdir}/libQt5Positioning.so.5*
-%{_qt5_archdatadir}/qml/QtPositioning/
+%dir %{_qt5_archdatadir}/qml/QtPositioning
+%{_qt5_archdatadir}/qml/QtPositioning/*
 %{_qt5_plugindir}/position/
 %dir %{_qt5_libdir}/cmake/
-%dir %{_qt5_libdir}/cmake/Qt5Location
-%dir %{_qt5_libdir}/cmake/Qt5Positioning
-%{_qt5_libdir}/cmake/Qt5Location/Qt5Location_QGeoServiceProviderFactory*.cmake
-%{_qt5_libdir}/cmake/Qt5Positioning/Qt5Positioning_QGeoPositionInfoSourceFactory*.cmake
 
 %files devel
 %{_qt5_headerdir}/QtLocation/
 %{_qt5_libdir}/libQt5Location.so
 %{_qt5_libdir}/libQt5Location.prl
-%{_qt5_libdir}/pkgconfig/Qt5Location.pc
-%{_qt5_archdatadir}/mkspecs/modules/qt_lib_location*.pri
-%{_qt5_libdir}/cmake/Qt5Location/Qt5LocationConfig*.cmake
 %{_qt5_headerdir}/QtPositioning/
 %{_qt5_libdir}/libQt5Positioning.so
 %{_qt5_libdir}/libQt5Positioning.prl
-%{_qt5_libdir}/cmake/Qt5Positioning/Qt5PositioningConfig*.cmake
+%{_qt5_libdir}/pkgconfig/Qt5Location.pc
+%dir %{_qt5_libdir}/cmake/Qt5Location
+%{_qt5_libdir}/cmake/Qt5Location/Qt5Location*.cmake
+%{_qt5_archdatadir}/mkspecs/modules/qt_lib_location*.pri
 %{_qt5_libdir}/pkgconfig/Qt5Positioning.pc
+%dir %{_qt5_libdir}/cmake/Qt5Positioning
+%{_qt5_libdir}/cmake/Qt5Positioning/Qt5Positioning*.cmake
 %{_qt5_archdatadir}/mkspecs/modules/qt_lib_positioning*.pri
 
 %if 0%{?docs}
@@ -150,6 +155,14 @@ popd
 
 
 %changelog
+* Fri Oct 06 2017 Jan Grulich <jgrulich@redhat.com> - 5.9.2-1
+- Update to 5.9.2
+  Resolves: bz#1482783
+
+* Mon Aug 28 2017 Jan Grulich <jgrulich@redhat.com> - 5.9.1-1
+- Update to 5.9.1
+  Resolves: bz#1482783
+
 * Wed Jan 11 2017 Jan Grulich <jgrulich@redhat.com> - 5.6.2-1
 - Update to 5.6.2
   Resolves: bz#1384822

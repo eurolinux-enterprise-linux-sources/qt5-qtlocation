@@ -37,6 +37,7 @@
 #ifndef QGEOTILEFETCHERMAPBOX_H
 #define QGEOTILEFETCHERMAPBOX_H
 
+#include <qvector.h>
 #include <QtLocation/private/qgeotilefetcher_p.h>
 
 QT_BEGIN_NAMESPACE
@@ -49,10 +50,10 @@ class QGeoTileFetcherMapbox : public QGeoTileFetcher
     Q_OBJECT
 
 public:
-    QGeoTileFetcherMapbox(QObject *parent = 0);
+    QGeoTileFetcherMapbox(int scaleFactor, QGeoTiledMappingManagerEngine *parent);
 
     void setUserAgent(const QByteArray &userAgent);
-    void setMapId(const QString &mapId);
+    void setMapIds(const QVector<QString> &mapIds);
     void setFormat(const QString &format);
     void setAccessToken(const QString &accessToken);
 
@@ -61,10 +62,11 @@ private:
 
     QNetworkAccessManager *m_networkManager;
     QByteArray m_userAgent;
-    QString m_mapId;
     QString m_format;
     QString m_replyFormat;
     QString m_accessToken;
+    QVector<QString> m_mapIds;
+    int m_scaleFactor;
 };
 
 QT_END_NAMESPACE

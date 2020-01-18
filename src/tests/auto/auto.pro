@@ -42,7 +42,7 @@ qtHaveModule(location) {
            qgeocodereply \
            qgeocodingmanager \
            qgeomaneuver \
-           qgeomapscene \
+           qgeotiledmapscene \
            qgeoroute \
            qgeoroutereply \
            qgeorouterequest \
@@ -50,9 +50,9 @@ qtHaveModule(location) {
            qgeoroutingmanager \
            qgeoroutingmanagerplugins \
            qgeoserviceprovider \
+           qgeotiledmap \
            qgeotilespec \
            qgeoroutexmlparser \
-           qgeomapcontroller \
            maptype \
            nokia_services \
            qgeocameratiles
@@ -62,6 +62,9 @@ qtHaveModule(location) {
                 declarative_geoshape
 
         !mac: SUBDIRS += declarative_ui
+
+        # QTBUG-60268
+        boot2qt: SUBDIRS -= declarative_ui
     }
 }
 
@@ -74,6 +77,7 @@ SUBDIRS += \
            qgeoshape \
            qgeorectangle \
            qgeocircle \
+           qgeopath \
            qgeocoordinate \
            qgeolocation \
            qgeopositioninfo \

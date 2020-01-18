@@ -51,8 +51,8 @@
 #include <QObject>
 #include <QSize>
 #include <QPair>
-#include <QtLocation/qlocationglobal.h>
-#include "qgeomaptype_p.h"
+#include <QtLocation/private/qlocationglobal_p.h>
+#include <QtLocation/private/qgeomaptype_p.h>
 
 QT_BEGIN_NAMESPACE
 
@@ -66,7 +66,7 @@ class QGeoMappingManagerEngine;
 class QGeoCameraCapabilities;
 
 
-class Q_LOCATION_EXPORT QGeoMappingManager : public QObject
+class Q_LOCATION_PRIVATE_EXPORT QGeoMappingManager : public QObject
 {
     Q_OBJECT
 
@@ -81,8 +81,6 @@ public:
     QList<QGeoMapType> supportedMapTypes() const;
 
     bool isInitialized() const;
-
-    QGeoCameraCapabilities cameraCapabilities() const;
 
     void setLocale(const QLocale &locale);
     QLocale locale() const;

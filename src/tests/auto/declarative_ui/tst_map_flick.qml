@@ -1,31 +1,26 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:GPL-EXCEPT$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
-** GNU Lesser General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
-**
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3 as published by the Free Software
+** Foundation with exceptions as appearing in the file LICENSE.GPL3-EXCEPT
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -35,12 +30,13 @@ import QtQuick 2.5
 import QtTest 1.0
 import QtLocation 5.6
 import QtPositioning 5.5
+import QtLocation.Test 5.6
 
 Item {
     // General-purpose elements for the test:
     id: page
-    width: 100
-    height: 100
+    width: 120
+    height: 120
     Plugin { id: testPlugin; name: "qmlgeo.test.plugin"; allowExperimental: true }
 
     property variant coordinate: QtPositioning.coordinate(10, 11)
@@ -98,16 +94,18 @@ Item {
     SignalSpy {id: mouseAreaBottomSpy; target: mouseAreaBottom; signalName: 'onPressed'}
 
     TestCase {
-        when: windowShown
+        when: windowShown && map.mapReady
         name: "MapFlick"
 
         function init()
         {
+            if (Qt.platform.os === "windows" && (LocationTestHelper.x86Bits() === 32))
+                skip("QTBUG-59503")
             map.gesture.acceptedGestures = MapGestureArea.PanGesture | MapGestureArea.FlickGesture;
             map.gesture.enabled = true
             map.gesture.panEnabled = true
             map.gesture.flickDeceleration = 500
-            map.zoomLevel = 0
+            map.zoomLevel = 9 // or flicking diagonally won't work
             map.disableOnPanStartedWithNoGesture = false
             map.disableOnFlickStartedWithNoGesture = false
             map.disableOnPanStartedWithDisabled = false
@@ -194,7 +192,7 @@ Item {
             flick_down()
         }
 
-        function test_flick_down_with_filtetring()
+        function test_flick_down_with_filtering()
         {
             mouseAreaTop.visible = true
             mouseAreaBottom.visible = true
@@ -240,12 +238,14 @@ Item {
         {
             map.center.latitude = 50
             map.center.longitude = 50
-            mousePress(page, 0, 0)
-            for (var i = 0; i < 50; i += 5) {
+            var pos = 5
+            mousePress(page, pos, pos)
+            for (var i = pos; i < 50; i += 5) {
+                pos = i
                 wait(20)
-                mouseMove(page, i, i, 0, Qt.LeftButton);
+                mouseMove(page, pos, pos, 0, Qt.LeftButton);
             }
-            mouseRelease(page, 50, 50)
+            mouseRelease(page, pos, pos)
             verify(map.center.latitude > 50)
             verify(map.center.longitude < 50)
             var moveLatitude = map.center.latitude

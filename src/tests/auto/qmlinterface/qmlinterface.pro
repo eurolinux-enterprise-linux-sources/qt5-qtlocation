@@ -24,4 +24,3 @@ OTHER_FILES += \
     data/TestPlaceAttribute.qml \
     data/TestContactDetail.qml
 
-DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0

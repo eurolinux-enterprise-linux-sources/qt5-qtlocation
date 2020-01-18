@@ -2,6 +2,7 @@ TARGET = qml_location_mapviewer
 TEMPLATE = app
 
 QT += qml network quick positioning location
+CONFIG += qtquickcompiler
 SOURCES += main.cpp
 
 RESOURCES += \
@@ -10,6 +11,7 @@ RESOURCES += \
 OTHER_FILES +=mapviewer.qml \
     helper.js \
     map/MapComponent.qml \
+    map/MapSliders.qml \
     map/Marker.qml \
     map/CircleItem.qml \
     map/RectangleItem.qml \

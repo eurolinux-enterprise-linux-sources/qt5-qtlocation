@@ -18,6 +18,7 @@ PUBLIC_HEADERS += \
                     maps/qgeoserviceprovider.h
 
 PRIVATE_HEADERS += \
+                    maps/qgeomapparameter_p.h \
                     maps/qgeocameracapabilities_p.h \
                     maps/qgeocameradata_p.h \
                     maps/qgeocameratiles_p.h \
@@ -25,8 +26,7 @@ PRIVATE_HEADERS += \
                     maps/qgeocodingmanagerengine_p.h \
                     maps/qgeocodingmanager_p.h \
                     maps/qgeomaneuver_p.h \
-                    maps/qgeomapcontroller_p.h \
-                    maps/qgeomapscene_p.h \
+                    maps/qgeotiledmapscene_p.h \
                     maps/qgeotilerequestmanager_p.h \
                     maps/qgeomap_p.h \
                     maps/qgeomap_p_p.h \
@@ -55,6 +55,11 @@ PRIVATE_HEADERS += \
                     maps/qgeotiledmapreply_p_p.h \
                     maps/qgeotilespec_p.h \
                     maps/qgeotilespec_p_p.h \
+                    maps/qgeorouteparser_p.h \
+                    maps/qgeorouteparser_p_p.h \
+                    maps/qgeorouteparserosrmv5_p.h \
+                    maps/qgeorouteparserosrmv4_p.h \
+                    maps/qgeoprojection_p.h \
                     maps/qcache3q_p.h
 
 SOURCES += \
@@ -65,8 +70,6 @@ SOURCES += \
             maps/qgeocodingmanager.cpp \
             maps/qgeocodingmanagerengine.cpp \
             maps/qgeomaneuver.cpp \
-            maps/qgeomapcontroller.cpp \
-            maps/qgeomapscene.cpp \
             maps/qgeotilerequestmanager.cpp \
             maps/qgeomap.cpp \
             maps/qgeomappingmanager.cpp \
@@ -86,6 +89,10 @@ SOURCES += \
             maps/qgeofiletilecache.cpp \
             maps/qgeotiledmapreply.cpp \
             maps/qgeotilespec.cpp \
-            maps/qgeotiledmap.cpp
-
-
+            maps/qgeotiledmap.cpp \
+            maps/qgeotiledmapscene.cpp \
+            maps/qgeorouteparser.cpp \
+            maps/qgeorouteparserosrmv5.cpp \
+            maps/qgeorouteparserosrmv4.cpp \
+            maps/qgeomapparameter.cpp \
+            maps/qgeoprojection.cpp

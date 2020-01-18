@@ -1,11 +1,13 @@
 TEMPLATE = subdirs
 
+QT_FOR_CONFIG += positioning-private
+
 qtHaveModule(dbus):SUBDIRS += geoclue
-config_gypsy:SUBDIRS += gypsy
+qtConfig(gypsy):SUBDIRS += gypsy
+qtConfig(winrt_geolocation):SUBDIRS += winrt
 qtHaveModule(simulator):SUBDIRS += simulator
-osx|ios:SUBDIRS += corelocation
-android:!android-no-sdk:SUBDIRS += android
-winrt:SUBDIRS += winrt
+osx|ios|tvos:SUBDIRS += corelocation
+android:SUBDIRS += android
 win32:qtHaveModule(serialport):SUBDIRS += serialnmea
 
 SUBDIRS += \

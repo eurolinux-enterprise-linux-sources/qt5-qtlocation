@@ -38,21 +38,34 @@
 #include "qgeotilespec_p.h"
 #include "qgeomaptype_p.h"
 
-#include <QtPositioning/private/qgeoprojection_p.h>
+#include <QtPositioning/private/qwebmercator_p.h>
 #include <QtPositioning/private/qdoublevector2d_p.h>
 #include <QtPositioning/private/qdoublevector3d_p.h>
+#include <QtPositioning/private/qlocationutils_p.h>
+#include <QtGui/QMatrix4x4>
 #include <QVector>
 #include <QMap>
 #include <QPair>
 #include <QSet>
 #include <QSize>
 #include <cmath>
+#include <limits>
+
+static QVector3D toVector3D(const QDoubleVector3D& in)
+{
+    return QVector3D(in.x(), in.y(), in.z());
+}
+
+static QDoubleVector3D toDoubleVector3D(const QVector3D& in)
+{
+    return QDoubleVector3D(in.x(), in.y(), in.z());
+}
 
 QT_BEGIN_NAMESPACE
-#define PREFETCH_FRUSTUM_SCALE 2.0
 
 struct Frustum
 {
+    QDoubleVector3D apex;
     QDoubleVector3D topLeftNear;
     QDoubleVector3D topLeftFar;
     QDoubleVector3D topRightNear;
@@ -77,7 +90,6 @@ public:
     QGeoCameraData m_camera;
     QSize m_screenSize;
     int m_tileSize;
-    int m_maxZoom;
     QSet<QGeoTileSpec> m_tiles;
 
     int m_intZoomLevel;
@@ -86,26 +98,26 @@ public:
     bool m_dirtyGeometry;
     bool m_dirtyMetadata;
 
+    double m_viewExpansion;
     void updateMetadata();
-    void updateGeometry(double viewExpansion = 1.0);
+    void updateGeometry();
 
-    Frustum createFrustum(double fieldOfViewGradient) const;
+    Frustum createFrustum(double viewExpansion) const;
 
-    class LengthSorter
+    struct ClippedFootprint
     {
-    public:
-        QDoubleVector3D base;
-        bool operator()(const QDoubleVector3D &lhs, const QDoubleVector3D &rhs)
-        {
-            return (lhs - base).lengthSquared() < (rhs - base).lengthSquared();
-        }
+        ClippedFootprint(const PolygonVector &left_, const PolygonVector &mid_, const PolygonVector &right_)
+            : left(left_), mid(mid_), right(right_)
+        {}
+        PolygonVector left;
+        PolygonVector mid;
+        PolygonVector right;
     };
 
-    void appendZIntersects(const QDoubleVector3D &start, const QDoubleVector3D &end, double z, QVector<QDoubleVector3D> &results) const;
     PolygonVector frustumFootprint(const Frustum &frustum) const;
 
     QPair<PolygonVector, PolygonVector> splitPolygonAtAxisValue(const PolygonVector &polygon, int axis, double value) const;
-    QPair<PolygonVector, PolygonVector> clipFootprintToMap(const PolygonVector &footprint) const;
+    ClippedFootprint clipFootprintToMap(const PolygonVector &footprint) const;
 
     QList<QPair<double, int> > tileIntersections(double p1, int t1, double p2, int t2) const;
     QSet<QGeoTileSpec> tilesFromPolygon(const PolygonVector &polygon) const;
@@ -127,58 +139,6 @@ QGeoCameraTiles::~QGeoCameraTiles()
 {
 }
 
-QSet<QGeoTileSpec> QGeoCameraTiles::prefetchTiles(PrefetchStle style)
-{
-    int currentIntZoom = static_cast<int>(std::floor(d_ptr->m_camera.zoomLevel()));
-    double currentFloatZoom = d_ptr->m_camera.zoomLevel();
-
-    d_ptr->m_tiles.clear();
-    d_ptr->m_intZoomLevel = currentIntZoom;
-    d_ptr->m_sideLength = 1 << d_ptr->m_intZoomLevel ;
-    d_ptr->updateGeometry(PREFETCH_FRUSTUM_SCALE);
-
-    switch (style) {
-
-    case PrefetchNeighbourLayer: {
-
-        double zoomFraction = d_ptr->m_camera.zoomLevel() - currentIntZoom;
-        int nearestNeighbourLayer = zoomFraction > 0.5 ? currentIntZoom + 1 : currentIntZoom - 1;
-        if (nearestNeighbourLayer <= d_ptr->m_maxZoom && nearestNeighbourLayer >= 0) {
-            d_ptr->m_intZoomLevel = nearestNeighbourLayer;
-            d_ptr->m_sideLength = 1 << d_ptr->m_intZoomLevel;
-            d_ptr->m_camera.setZoomLevel(d_ptr->m_intZoomLevel);
-            // Approx heuristic, keeping total # prefetched tiles roughly independent of the
-            // fractional zoom level.
-            double neighbourScale = (1.0 + zoomFraction)/2.0;
-            d_ptr->updateGeometry(PREFETCH_FRUSTUM_SCALE * neighbourScale);
-        }
-        break;
-    }
-
-    case PrefetchTwoNeighbourLayers: {
-        // This is a simpler strategy, we just prefetch from layer above and below
-        // for the layer below we only use half the size as this fills the screen
-        if (currentIntZoom > 0) {
-            d_ptr->m_intZoomLevel = currentIntZoom - 1;
-            d_ptr->m_sideLength = 1 << d_ptr->m_intZoomLevel;
-            d_ptr->m_camera.setZoomLevel(d_ptr->m_intZoomLevel);
-            d_ptr->updateGeometry(0.5);
-        }
-        if (currentIntZoom < d_ptr->m_maxZoom) {
-            d_ptr->m_intZoomLevel = currentIntZoom + 1;
-            d_ptr->m_sideLength = 1 << d_ptr->m_intZoomLevel;
-            d_ptr->m_camera.setZoomLevel(d_ptr->m_intZoomLevel);
-            d_ptr->updateGeometry(1.0);
-        }
-    }
-    }
-
-    d_ptr->m_intZoomLevel = currentIntZoom;
-    d_ptr->m_sideLength = 1 << d_ptr->m_intZoomLevel;
-    d_ptr->m_camera.setZoomLevel(currentFloatZoom);
-    return d_ptr->m_tiles;
-}
-
 void QGeoCameraTiles::setCameraData(const QGeoCameraData &camera)
 {
     if (d_ptr->m_camera == camera)
@@ -188,6 +148,11 @@ void QGeoCameraTiles::setCameraData(const QGeoCameraData &camera)
     d_ptr->m_camera = camera;
     d_ptr->m_intZoomLevel = static_cast<int>(std::floor(d_ptr->m_camera.zoomLevel()));
     d_ptr->m_sideLength = 1 << d_ptr->m_intZoomLevel;
+}
+
+QGeoCameraData QGeoCameraTiles::cameraData() const
+{
+    return d_ptr->m_camera;
 }
 
 void QGeoCameraTiles::setScreenSize(const QSize &size)
@@ -217,6 +182,11 @@ void QGeoCameraTiles::setMapType(const QGeoMapType &mapType)
     d_ptr->m_mapType = mapType;
 }
 
+QGeoMapType QGeoCameraTiles::activeMapType() const
+{
+    return d_ptr->m_mapType;
+}
+
 void QGeoCameraTiles::setMapVersion(int mapVersion)
 {
     if (d_ptr->m_mapVersion == mapVersion)
@@ -235,21 +205,18 @@ void QGeoCameraTiles::setTileSize(int tileSize)
     d_ptr->m_tileSize = tileSize;
 }
 
+void QGeoCameraTiles::setViewExpansion(double viewExpansion)
+{
+    d_ptr->m_viewExpansion = viewExpansion;
+    d_ptr->m_dirtyGeometry = true;
+}
+
 int QGeoCameraTiles::tileSize() const
 {
     return d_ptr->m_tileSize;
 }
 
-void QGeoCameraTiles::setMaximumZoomLevel(int maxZoom)
-{
-    if (d_ptr->m_maxZoom == maxZoom)
-        return;
-
-    d_ptr->m_dirtyGeometry = true;
-    d_ptr->m_maxZoom = maxZoom;
-}
-
-const QSet<QGeoTileSpec>& QGeoCameraTiles::visibleTiles()
+const QSet<QGeoTileSpec>& QGeoCameraTiles::createTiles()
 {
     if (d_ptr->m_dirtyGeometry) {
         d_ptr->m_tiles.clear();
@@ -268,11 +235,11 @@ const QSet<QGeoTileSpec>& QGeoCameraTiles::visibleTiles()
 QGeoCameraTilesPrivate::QGeoCameraTilesPrivate()
 :   m_mapVersion(-1),
     m_tileSize(0),
-    m_maxZoom(0),
     m_intZoomLevel(0),
     m_sideLength(0),
     m_dirtyGeometry(false),
-    m_dirtyMetadata(false)
+    m_dirtyMetadata(false),
+    m_viewExpansion(1.0)
 {
 }
 
@@ -295,39 +262,46 @@ void QGeoCameraTilesPrivate::updateMetadata()
     m_tiles = newTiles;
 }
 
-void QGeoCameraTilesPrivate::updateGeometry(double viewExpansion)
+void QGeoCameraTilesPrivate::updateGeometry()
 {
     // Find the frustum from the camera / screen / viewport information
     // The larger frustum when stationary is a form of prefetching
-    Frustum f = createFrustum(viewExpansion);
+    Frustum f = createFrustum(m_viewExpansion);
 
     // Find the polygon where the frustum intersects the plane of the map
     PolygonVector footprint = frustumFootprint(f);
 
     // Clip the polygon to the map, split it up if it cross the dateline
-    QPair<PolygonVector, PolygonVector> polygons = clipFootprintToMap(footprint);
+    ClippedFootprint polygons = clipFootprintToMap(footprint);
 
-    if (!polygons.first.isEmpty()) {
-        QSet<QGeoTileSpec> tilesLeft = tilesFromPolygon(polygons.first);
+    if (!polygons.left.isEmpty()) {
+        QSet<QGeoTileSpec> tilesLeft = tilesFromPolygon(polygons.left);
         m_tiles.unite(tilesLeft);
     }
 
-    if (!polygons.second.isEmpty()) {
-        QSet<QGeoTileSpec> tilesRight = tilesFromPolygon(polygons.second);
+    if (!polygons.right.isEmpty()) {
+        QSet<QGeoTileSpec> tilesRight = tilesFromPolygon(polygons.right);
+        m_tiles.unite(tilesRight);
+    }
+
+    if (!polygons.mid.isEmpty()) {
+        QSet<QGeoTileSpec> tilesRight = tilesFromPolygon(polygons.mid);
         m_tiles.unite(tilesRight);
     }
 }
 
-Frustum QGeoCameraTilesPrivate::createFrustum(double fieldOfViewGradient) const
+Frustum QGeoCameraTilesPrivate::createFrustum(double viewExpansion) const
 {
-    QDoubleVector3D center = m_sideLength * QGeoProjection::coordToMercator(m_camera.center());
-    center.setZ(0.0);
+    double apertureSize = 1.0;
+    if (m_camera.fieldOfView() != 90.0) //aperture(90 / 2) = 1
+        apertureSize = tan(QLocationUtils::radians(m_camera.fieldOfView()) * 0.5);
+    QDoubleVector3D center = m_sideLength * QWebMercator::coordToMercator(m_camera.center());
 
-    double f = qMin(m_screenSize.width(), m_screenSize.height());
+    double f = m_screenSize.height();
 
-    double z = std::pow(2.0, m_camera.zoomLevel() - m_intZoomLevel) * m_tileSize;
+    double z = std::pow(2.0, m_camera.zoomLevel() - m_intZoomLevel) * m_tileSize; // between 1 and 2 * m_tileSize
 
-    double altitude = f / (2.0 * z);
+    double altitude = (f / (2.0 * z)) / apertureSize;
     QDoubleVector3D eye = center;
     eye.setZ(altitude);
 
@@ -335,29 +309,42 @@ Frustum QGeoCameraTilesPrivate::createFrustum(double fieldOfViewGradient) const
     QDoubleVector3D side = QDoubleVector3D::normal(view, QDoubleVector3D(0.0, 1.0, 0.0));
     QDoubleVector3D up = QDoubleVector3D::normal(side, view);
 
+    QMatrix4x4 mBearing;
+    // The rotation direction here is the opposite of QGeoTiledMapScene::setupCamera,
+    // as this is basically rotating the map against a fixed view frustum.
+    mBearing.rotate(1.0 * m_camera.bearing(), toVector3D(view));
+    up = toDoubleVector3D(mBearing * toVector3D(up));
+
+    // same for tilting
+    QDoubleVector3D side2 = QDoubleVector3D::normal(up, view);
+    QMatrix4x4 mTilt;
+    mTilt.rotate(-1.0 * m_camera.tilt(), toVector3D(side2));
+    eye = toDoubleVector3D((mTilt * toVector3D(view)) + toVector3D(center));
+
+    view = eye - center;
+    side = QDoubleVector3D::normal(view, QDoubleVector3D(0.0, 1.0, 0.0));
+    up = QDoubleVector3D::normal(view, side2);
+
     double nearPlane =  1 / (4.0 * m_tileSize );
-    double farPlane = altitude + 1.0;
+    // farPlane plays a role on how much gets clipped when the map gets tilted. It used to be altitude + 1.0
+    // The value of 8.0 has been chosen as an acceptable compromise.
+    // TODO: use m_camera.clipDistance(); when this will be introduced
+    double farPlane = altitude + 8.0;
 
     double aspectRatio = 1.0 * m_screenSize.width() / m_screenSize.height();
 
-    double hn,wn,hf,wf = 0.0;
+    // Half values. Half width near, far, height near, far.
+    double hhn,hwn,hhf,hwf = 0.0;
 
-    // fixes field of view at 45 degrees
-    // this assumes that viewSize = 2*nearPlane x 2*nearPlane
+    // This used to fix the (half) field of view at 45 degrees
+    // half because this assumed that viewSize = 2*nearPlane x 2*nearPlane
+    viewExpansion *= apertureSize;
 
-    if (aspectRatio > 1.0) {
-        hn = 2 * fieldOfViewGradient * nearPlane;
-        wn = hn * aspectRatio;
+    hhn = viewExpansion * nearPlane;
+    hwn = hhn * aspectRatio;
 
-        hf = 2 * fieldOfViewGradient * farPlane;
-        wf = hf * aspectRatio;
-    } else {
-        wn = 2 * fieldOfViewGradient * nearPlane;
-        hn = wn / aspectRatio;
-
-        wf = 2 * fieldOfViewGradient * farPlane;
-        hf = wf / aspectRatio;
-    }
+    hhf = viewExpansion * farPlane;
+    hwf = hhf * aspectRatio;
 
     QDoubleVector3D d = center - eye;
     d.normalize();
@@ -369,168 +356,60 @@ Frustum QGeoCameraTilesPrivate::createFrustum(double fieldOfViewGradient) const
 
     Frustum frustum;
 
-    frustum.topLeftFar = cf + (up * hf / 2) - (right * wf / 2);
-    frustum.topRightFar = cf + (up * hf / 2) + (right * wf / 2);
-    frustum.bottomLeftFar = cf - (up * hf / 2) - (right * wf / 2);
-    frustum.bottomRightFar = cf - (up * hf / 2) + (right * wf / 2);
+    frustum.apex = eye;
 
-    frustum.topLeftNear = cn + (up * hn / 2) - (right * wn / 2);
-    frustum.topRightNear = cn + (up * hn / 2) + (right * wn / 2);
-    frustum.bottomLeftNear = cn - (up * hn / 2) - (right * wn / 2);
-    frustum.bottomRightNear = cn - (up * hn / 2) + (right * wn / 2);
+    frustum.topLeftFar = cf - (up * hhf) - (right * hwf);
+    frustum.topRightFar = cf - (up * hhf) + (right * hwf);
+    frustum.bottomLeftFar = cf + (up * hhf) - (right * hwf);
+    frustum.bottomRightFar = cf + (up * hhf) + (right * hwf);
+
+    frustum.topLeftNear = cn - (up * hhn) - (right * hwn);
+    frustum.topRightNear = cn - (up * hhn) + (right * hwn);
+    frustum.bottomLeftNear = cn + (up * hhn) - (right * hwn);
+    frustum.bottomRightNear = cn + (up * hhn) + (right * hwn);
 
     return frustum;
 }
 
-void QGeoCameraTilesPrivate::appendZIntersects(const QDoubleVector3D &start,
+static bool appendZIntersects(const QDoubleVector3D &start,
                                                const QDoubleVector3D &end,
                                                double z,
-                                               QVector<QDoubleVector3D> &results) const
+                                               QVector<QDoubleVector3D> &results)
 {
     if (start.z() == end.z()) {
-        if (start.z() == z) {
-            results.append(start);
-            results.append(end);
-        }
+        return false;
     } else {
         double f = (start.z() - z) / (start.z() - end.z());
-        if ((0 <= f) && (f <= 1.0)) {
+        if ((f >= 0) && (f <= 1.0)) {
             results.append((1 - f) * start + f * end);
+            return true;
         }
     }
+    return false;
 }
-
-/***************************************************/
-/* Local copy of qSort & qSortHelper to suppress deprecation warnings
- * following the deprecation of QtAlgorithms. The comparison has subtle
- * differences which eluded detection so far. We just reuse old qSort for now.
- **/
-
-template <typename RandomAccessIterator, typename LessThan>
-inline void localqSort(RandomAccessIterator start, RandomAccessIterator end, LessThan lessThan)
-{
-    if (start != end)
-        localqSortHelper(start, end, *start, lessThan);
-}
-
-template <typename RandomAccessIterator, typename T, typename LessThan>
-void localqSortHelper(RandomAccessIterator start, RandomAccessIterator end, const T &t, LessThan lessThan)
-{
-top:
-    int span = int(end - start);
-    if (span < 2)
-        return;
-
-    --end;
-    RandomAccessIterator low = start, high = end - 1;
-    RandomAccessIterator pivot = start + span / 2;
-
-    if (lessThan(*end, *start))
-        qSwap(*end, *start);
-    if (span == 2)
-        return;
-
-    if (lessThan(*pivot, *start))
-        qSwap(*pivot, *start);
-    if (lessThan(*end, *pivot))
-        qSwap(*end, *pivot);
-    if (span == 3)
-        return;
-
-    qSwap(*pivot, *end);
-
-    while (low < high) {
-        while (low < high && lessThan(*low, *end))
-            ++low;
-
-        while (high > low && lessThan(*end, *high))
-            --high;
-
-        if (low < high) {
-            qSwap(*low, *high);
-            ++low;
-            --high;
-        } else {
-            break;
-        }
-    }
-
-    if (lessThan(*low, *end))
-        ++low;
-
-    qSwap(*end, *low);
-    localqSortHelper(start, low, t, lessThan);
-
-    start = low + 1;
-    ++end;
-    goto top;
-}
-/***************************************************/
-
 
 // Returns the intersection of the plane of the map and the camera frustum as a right handed polygon
 PolygonVector QGeoCameraTilesPrivate::frustumFootprint(const Frustum &frustum) const
 {
     PolygonVector points;
-    points.reserve(24);
+    points.reserve(4);
 
-    appendZIntersects(frustum.topLeftNear, frustum.topLeftFar, 0.0, points);
-    appendZIntersects(frustum.topRightNear, frustum.topRightFar, 0.0, points);
-    appendZIntersects(frustum.bottomLeftNear, frustum.bottomLeftFar, 0.0, points);
-    appendZIntersects(frustum.bottomRightNear, frustum.bottomRightFar, 0.0, points);
+    // The camera is always upright. Tilting angle never reach 90degrees.
+    // Meaning: bottom frustum edges always intersect the map plane, top ones may not.
 
-    appendZIntersects(frustum.topLeftNear, frustum.bottomLeftNear, 0.0, points);
-    appendZIntersects(frustum.bottomLeftNear, frustum.bottomRightNear, 0.0, points);
-    appendZIntersects(frustum.bottomRightNear, frustum.topRightNear, 0.0, points);
-    appendZIntersects(frustum.topRightNear, frustum.topLeftNear, 0.0, points);
+    // Top Right
+    if (!appendZIntersects(frustum.apex, frustum.topRightFar, 0.0, points))
+        appendZIntersects(frustum.topRightFar, frustum.bottomRightFar, 0.0, points);
 
-    appendZIntersects(frustum.topLeftFar, frustum.bottomLeftFar, 0.0, points);
-    appendZIntersects(frustum.bottomLeftFar, frustum.bottomRightFar, 0.0, points);
-    appendZIntersects(frustum.bottomRightFar, frustum.topRightFar, 0.0, points);
-    appendZIntersects(frustum.topRightFar, frustum.topLeftFar, 0.0, points);
+    // Bottom Right
+    appendZIntersects(frustum.apex, frustum.bottomRightFar, 0.0, points);
 
-    if (points.isEmpty())
-        return points;
+    // Bottom Left
+    appendZIntersects(frustum.apex, frustum.bottomLeftFar, 0.0, points);
 
-    // sort points into a right handed polygon
-
-    LengthSorter sorter;
-
-    // - initial sort to remove duplicates
-    sorter.base = points.first();
-    localqSort(points.begin(), points.end(), sorter);
-    //std::sort(points.begin(), points.end(), sorter);
-    for (int i = points.size() - 1; i > 0; --i) {
-        if (points.at(i) == points.at(i - 1))
-            points.remove(i);
-    }
-
-    // - proper sort
-    //   - start with the first point, put it in the sorted part of the list
-    //   - add the nearest unsorted point to the last sorted point to the end
-    //     of the sorted points
-    PolygonVector::iterator i;
-    for (i = points.begin(); i != points.end(); ++i) {
-        sorter.base = *i;
-        if (i + 1 != points.end())
-            std::sort(i + 1, points.end(), sorter) ;
-    }
-
-    // - determine if what we have is right handed
-    int size = points.size();
-    if (size >= 3) {
-        QDoubleVector3D normal = QDoubleVector3D::normal(points.at(1) - points.at(0),
-                                                         points.at(2) - points.at(1));
-        // - if not, reverse the list
-        if (normal.z() < 0.0) {
-            int halfSize = size / 2;
-            for (int i = 0; i < halfSize; ++i) {
-                QDoubleVector3D spare = points.at(i);
-                points[i] = points[size - 1 - i];
-                points[size - 1 - i] = spare;
-            }
-        }
-    }
+    // Top Left
+    if (!appendZIntersects(frustum.apex, frustum.topLeftFar, 0.0, points))
+        appendZIntersects(frustum.topLeftFar, frustum.bottomLeftFar, 0.0, points);
 
     return points;
 }
@@ -625,8 +504,13 @@ QPair<PolygonVector, PolygonVector> QGeoCameraTilesPrivate::splitPolygonAtAxisVa
     return QPair<PolygonVector, PolygonVector>(polygonBelow, polygonAbove);
 }
 
+static void addXOffset(PolygonVector &footprint, double xoff)
+{
+    for (QDoubleVector3D &v: footprint)
+        v.setX(v.x() + xoff);
+}
 
-QPair<PolygonVector, PolygonVector> QGeoCameraTilesPrivate::clipFootprintToMap(const PolygonVector &footprint) const
+QGeoCameraTilesPrivate::ClippedFootprint QGeoCameraTilesPrivate::clipFootprintToMap(const PolygonVector &footprint) const
 {
     bool clipX0 = false;
     bool clipX1 = false;
@@ -634,20 +518,13 @@ QPair<PolygonVector, PolygonVector> QGeoCameraTilesPrivate::clipFootprintToMap(c
     bool clipY1 = false;
 
     double side = 1.0 * m_sideLength;
+    double minX = std::numeric_limits<double>::max();
+    double maxX = std::numeric_limits<double>::lowest();
 
-    typedef PolygonVector::const_iterator const_iter;
-
-    const_iter i = footprint.constBegin();
-    const_iter end = footprint.constEnd();
-    for (; i != end; ++i) {
-        QDoubleVector3D p = *i;
-        if ((p.x() < 0.0) || (qFuzzyIsNull(p.x())))
-            clipX0 = true;
-        if ((side < p.x()) || (qFuzzyCompare(side, p.x())))
-            clipX1 = true;
+    for (const QDoubleVector3D &p: footprint) {
         if (p.y() < 0.0)
             clipY0 = true;
-        if (side < p.y())
+        if (p.y() > side)
             clipY1 = true;
     }
 
@@ -661,11 +538,39 @@ QPair<PolygonVector, PolygonVector> QGeoCameraTilesPrivate::clipFootprintToMap(c
         results = splitPolygonAtAxisValue(results, 1, side).first;
     }
 
+    for (const QDoubleVector3D &p: results) {
+        if ((p.x() < 0.0) || (qFuzzyIsNull(p.x())))
+            clipX0 = true;
+        if ((p.x() > side) || (qFuzzyCompare(side, p.x())))
+            clipX1 = true;
+    }
+
+    for (const QDoubleVector3D &v : results) {
+        minX = qMin(v.x(), minX);
+        maxX = qMax(v.x(), maxX);
+    }
+
+    double footprintWidth = maxX - minX;
+
     if (clipX0) {
         if (clipX1) {
-            results = splitPolygonAtAxisValue(results, 0, 0.0).second;
-            results = splitPolygonAtAxisValue(results, 0, side).first;
-            return QPair<PolygonVector, PolygonVector>(results, PolygonVector());
+            if (footprintWidth > side) {
+                PolygonVector rightPart = splitPolygonAtAxisValue(results, 0, side).second;
+                addXOffset(rightPart,  -side);
+                rightPart = splitPolygonAtAxisValue(rightPart, 0, side).first; // clip it again, should it tend to infinite or so
+
+                PolygonVector leftPart = splitPolygonAtAxisValue(results, 0, 0).first;
+                addXOffset(leftPart,  side);
+                leftPart = splitPolygonAtAxisValue(leftPart, 0, 0).second; // same here
+
+                results = splitPolygonAtAxisValue(results, 0, 0.0).second;
+                results = splitPolygonAtAxisValue(results, 0, side).first;
+                return ClippedFootprint(leftPart, results, rightPart);
+            } else { // fitting the WebMercator square exactly?
+                results = splitPolygonAtAxisValue(results, 0, 0.0).second;
+                results = splitPolygonAtAxisValue(results, 0, side).first;
+                return ClippedFootprint(PolygonVector(), results, PolygonVector());
+            }
         } else {
             QPair<PolygonVector, PolygonVector> pair = splitPolygonAtAxisValue(results, 0, 0.0);
             if (pair.first.isEmpty()) {
@@ -695,11 +600,11 @@ QPair<PolygonVector, PolygonVector> QGeoCameraTilesPrivate::clipFootprintToMap(c
                     pair.first.append(QDoubleVector3D(side, y - 0.001, 0.0));
                 }
             } else {
-                for (int i = 0; i < pair.first.size(); ++i) {
-                    pair.first[i].setX(pair.first.at(i).x() + side);
-                }
+                addXOffset(pair.first, side);
+                if (footprintWidth > side)
+                    pair.first = splitPolygonAtAxisValue(pair.first, 0, 0).second;
             }
-            return pair;
+            return ClippedFootprint(pair.first, pair.second, PolygonVector());
         }
     } else {
         if (clipX1) {
@@ -731,13 +636,13 @@ QPair<PolygonVector, PolygonVector> QGeoCameraTilesPrivate::clipFootprintToMap(c
                     pair.second.append(QDoubleVector3D(0.0, y + 0.001, 0.0));
                 }
             } else {
-                for (int i = 0; i < pair.second.size(); ++i) {
-                    pair.second[i].setX(pair.second.at(i).x() - side);
-                }
+                addXOffset(pair.second, -side);
+                if (footprintWidth > side)
+                    pair.second = splitPolygonAtAxisValue(pair.second, 0, side).first;
             }
-            return pair;
+            return ClippedFootprint(PolygonVector(), pair.first, pair.second);
         } else {
-            return QPair<PolygonVector, PolygonVector>(results, PolygonVector());
+            return ClippedFootprint(PolygonVector(), results, PolygonVector());
         }
     }
 

@@ -242,6 +242,7 @@ void QGeoTiledMapReply::abort()
 {
     if (!isFinished())
         setFinished(true);
+    emit aborted();
 }
 
 /*
@@ -312,7 +313,5 @@ QGeoTiledMapReplyPrivate::QGeoTiledMapReplyPrivate(QGeoTiledMapReply::Error erro
       isCached(false) {}
 
 QGeoTiledMapReplyPrivate::~QGeoTiledMapReplyPrivate() {}
-
-#include "moc_qgeotiledmapreply_p.cpp"
 
 QT_END_NAMESPACE

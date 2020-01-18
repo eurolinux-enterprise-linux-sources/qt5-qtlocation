@@ -45,21 +45,31 @@
 
 QT_BEGIN_NAMESPACE
 
-QGeoTileFetcher::QGeoTileFetcher(QObject *parent)
-:   QObject(parent), d_ptr(new QGeoTileFetcherPrivate)
+QGeoTileFetcher::QGeoTileFetcher(QGeoMappingManagerEngine *parent)
+:   QObject(*new QGeoTileFetcherPrivate(), parent)
 {
     Q_D(QGeoTileFetcher);
 
     d->enabled_ = true;
+    d->engine_ = parent;
 
-    if (!d->queue_.isEmpty())
-        d->timer_.start(0, this);
+//    if (!d->queue_.isEmpty())
+//        d->timer_.start(0, this);
+}
+
+QGeoTileFetcher::QGeoTileFetcher(QGeoTileFetcherPrivate &dd, QGeoMappingManagerEngine *parent)
+:   QObject(dd,parent)
+{
+    Q_D(QGeoTileFetcher);
+    d->enabled_ = true;
+    d->engine_ = parent;
+
+//    if (!d->queue_.isEmpty())
+//        d->timer_.start(0, this);
 }
 
 QGeoTileFetcher::~QGeoTileFetcher()
 {
-
-    delete d_ptr;
 }
 
 void QGeoTileFetcher::updateTileRequests(const QSet<QGeoTileSpec> &tilesAdded,
@@ -109,8 +119,19 @@ void QGeoTileFetcher::requestNextTile()
         return;
 
     QGeoTileSpec ts = d->queue_.takeFirst();
+    if (d->queue_.isEmpty())
+        d->timer_.stop();
+
+    // Check against min/max zoom to prevent sending requests for not existing objects
+    const QGeoCameraCapabilities & cameraCaps = d->engine_->cameraCapabilities(ts.mapId());
+    // the ZL in QGeoTileSpec is relative to the native tile size of the provider.
+    // It gets denormalized in QGeoTiledMap.
+    if (ts.zoom() < cameraCaps.minimumZoomLevel() || ts.zoom() > cameraCaps.maximumZoomLevel())
+        return;
 
     QGeoTiledMapReply *reply = getTileImage(ts);
+    if (!reply)
+        return;
 
     if (reply->isFinished()) {
         handleReply(reply, ts);
@@ -123,9 +144,6 @@ void QGeoTileFetcher::requestNextTile()
 
         d->invmap_.insert(ts, reply);
     }
-
-    if (d->queue_.isEmpty())
-        d->timer_.stop();
 }
 
 void QGeoTileFetcher::finished()
@@ -193,7 +211,7 @@ void QGeoTileFetcher::handleReply(QGeoTiledMapReply *reply, const QGeoTileSpec &
 *******************************************************************************/
 
 QGeoTileFetcherPrivate::QGeoTileFetcherPrivate()
-:   enabled_(false)
+:   QObjectPrivate(), enabled_(false), engine_(0)
 {
 }
 

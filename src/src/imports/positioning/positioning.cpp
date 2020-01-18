@@ -1,31 +1,37 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
-** Contact: http://www.qt.io/licensing/
+** Copyright (C) 2016 The Qt Company Ltd.
+** Contact: https://www.qt.io/licensing/
 **
 ** This file is part of the QtPositioning module of the Qt Toolkit.
 **
-** $QT_BEGIN_LICENSE:LGPL21$
+** $QT_BEGIN_LICENSE:LGPL$
 ** Commercial License Usage
 ** Licensees holding valid commercial Qt licenses may use this file in
 ** accordance with the commercial license agreement provided with the
 ** Software or, alternatively, in accordance with the terms contained in
 ** a written agreement between you and The Qt Company. For licensing terms
-** and conditions see http://www.qt.io/terms-conditions. For further
-** information use the contact form at http://www.qt.io/contact-us.
+** and conditions see https://www.qt.io/terms-conditions. For further
+** information use the contact form at https://www.qt.io/contact-us.
 **
 ** GNU Lesser General Public License Usage
 ** Alternatively, this file may be used under the terms of the GNU Lesser
-** General Public License version 2.1 or version 3 as published by the Free
-** Software Foundation and appearing in the file LICENSE.LGPLv21 and
-** LICENSE.LGPLv3 included in the packaging of this file. Please review the
-** following information to ensure the GNU Lesser General Public License
-** requirements will be met: https://www.gnu.org/licenses/lgpl.html and
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** General Public License version 3 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL3 included in the
+** packaging of this file. Please review the following information to
+** ensure the GNU Lesser General Public License version 3 requirements
+** will be met: https://www.gnu.org/licenses/lgpl-3.0.html.
 **
-** As a special exception, The Qt Company gives you certain additional
-** rights. These rights are described in The Qt Company LGPL Exception
-** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
+** GNU General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 2.0 or (at your option) the GNU General
+** Public license version 3 or any later version approved by the KDE Free
+** Qt Foundation. The licenses are as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL2 and LICENSE.GPL3
+** included in the packaging of this file. Please review the following
+** information to ensure the GNU General Public License requirements will
+** be met: https://www.gnu.org/licenses/gpl-2.0.html and
+** https://www.gnu.org/licenses/gpl-3.0.html.
 **
 ** $QT_END_LICENSE$
 **
@@ -34,7 +40,7 @@
 
 #include <QtPositioning/private/qdeclarativegeoaddress_p.h>
 #include <QtPositioning/private/qdeclarativegeolocation_p.h>
-#include <QtPositioning/private/qgeoprojection_p.h>
+#include <QtPositioning/private/qwebmercator_p.h>
 
 #include "qdeclarativepositionsource_p.h"
 #include "qdeclarativeposition_p.h"
@@ -49,9 +55,17 @@
 
 #include <QtPositioning/QGeoRectangle>
 #include <QtPositioning/QGeoCircle>
+#include <QtPositioning/QGeoPath>
 #include <QtPositioning/QGeoLocation>
 
 #include <QtCore/QDebug>
+
+static void initResources()
+{
+#ifdef QT_STATIC
+    Q_INIT_RESOURCE(qmake_QtPositioning);
+#endif
+}
 
 QT_BEGIN_NAMESPACE
 
@@ -230,7 +244,7 @@ QT_BEGIN_NAMESPACE
     The \l isEmpty attribute can be used to test if the geoshape represents a region with a
     geometrical area of 0.
 
-    The \l {contains}{contains()} method can be used to test if a \l {coordinate} is
+    The \l {contains}() method can be used to test if a \l {coordinate} is
     within the geoshape.
 
     \section1 Example Usage
@@ -481,6 +495,38 @@ QT_BEGIN_NAMESPACE
     The default value for the radius is -1 indicating an invalid geocircle area.
 */
 
+/*!
+    \qmlbasictype geopath
+    \inqmlmodule QtPositioning
+    \ingroup qml-QtPositioning5-basictypes
+    \since 5.9
+
+    \brief The geopath type represents a geographic path.
+
+    The \c geopath type is a \l {geoshape} that represents a geographic
+    path. It is a direct representation of a \l QGeoPath and is defined
+    in terms of a \l {path} which holds the list of geo coordinates in the
+    path.
+
+    The path is considered invalid if it is empty.
+
+    When integrating with C++, note that any QGeoPath value passed into QML from C++ is
+    automatically converted into a \c geopath value, and vice versa.
+
+    \section1 Properties
+
+    \section2 path
+
+    This property holds the list of coordinates defining the path.
+
+    \section2 width
+
+    This property holds the width of the path in meters. This is currently only used
+    when calling the \l {contains}() method.
+
+    The default value for the width is 0.
+*/
+
 static QObject *singleton_type_factory(QQmlEngine *engine, QJSEngine *jsEngine)
 {
     Q_UNUSED(engine)
@@ -493,10 +539,11 @@ class QtPositioningDeclarativeModule: public QQmlExtensionPlugin
 {
     Q_OBJECT
 
-    Q_PLUGIN_METADATA(IID "org.qt-project.Qt.QQmlExtensionInterface/1.0"
+    Q_PLUGIN_METADATA(IID QQmlExtensionInterface_iid
                       FILE "plugin.json")
 
 public:
+    QtPositioningDeclarativeModule(QObject *parent = 0) : QQmlExtensionPlugin(parent) { initResources(); }
     virtual void registerTypes(const char *uri)
     {
         if (QLatin1String(uri) == QStringLiteral("QtPositioning")) {
@@ -513,6 +560,8 @@ public:
             QMetaType::registerEqualsComparator<QGeoRectangle>();
             qRegisterMetaType<QGeoCircle>();
             QMetaType::registerEqualsComparator<QGeoCircle>();
+            qRegisterMetaType<QGeoPath>();
+            QMetaType::registerEqualsComparator<QGeoPath>();
             qRegisterMetaType<QGeoLocation>();
             qRegisterMetaType<QGeoShape>();
             QMetaType::registerEqualsComparator<QGeoShape>();
@@ -532,14 +581,14 @@ public:
             // Introduction of 5.3 version; existing 5.0 exports become automatically available under 5.3
             minor = 3;
             qmlRegisterType<QQuickGeoCoordinateAnimation  >(uri, major, minor, "CoordinateAnimation");
-            qmlRegisterType<QDeclarativePosition, 1             >(uri, major, minor, "Position");
+            qmlRegisterType<QDeclarativePosition, 1>(uri, major, minor, "Position");
 
-            // Register the 5.4 types
-            // Introduction of 5.4 version; existing 5.3 exports become automatically available under 5.4
             minor = 4;
             qmlRegisterType<QDeclarativePosition, 2>(uri, major, minor, "Position");
 
-            minor = 6;
+            // Register the 5.9 types
+            // Introduction of 5.9 version; existing 5.4 exports become automatically available under 5.9
+            minor = 9;
             qmlRegisterType<QDeclarativePosition, 2>(uri, major, minor, "Position");
         } else {
             qDebug() << "Unsupported URI given to load positioning QML plugin: " << QLatin1String(uri);

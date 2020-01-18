@@ -47,6 +47,11 @@
 #include <QNetworkProxy>
 #include <QCoreApplication>
 
+static void initResources()
+{
+    Q_INIT_RESOURCE(nokia);
+}
+
 QT_BEGIN_NAMESPACE
 
 namespace
@@ -81,7 +86,11 @@ namespace
         token = parameters.value(QStringLiteral("here.token")).toString();
 
         if (isValidParameter(appId) && isValidParameter(token))
-            return;
+             return;
+        else if (!isValidParameter(appId))
+            qWarning() << "Invalid here.app_id";
+        else
+            qWarning() << "Invalid here.token";
 
         if (parameters.contains(QStringLiteral("app_id")) || parameters.contains(QStringLiteral("token")))
             qWarning() << QStringLiteral("Please prefix 'app_id' and 'token' with prefix 'here' (e.g.: 'here.app_id')");
@@ -104,6 +113,11 @@ namespace
 
         return new TInstance(networkManager, parameters, error, errorString);
     }
+}
+
+QGeoServiceProviderFactoryNokia::QGeoServiceProviderFactoryNokia()
+{
+    initResources();
 }
 
 QGeoCodingManagerEngine *QGeoServiceProviderFactoryNokia::createGeocodingManagerEngine(

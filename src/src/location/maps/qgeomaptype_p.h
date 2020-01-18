@@ -50,13 +50,13 @@
 
 #include <QtCore/QString>
 #include <QtCore/QSharedDataPointer>
-#include <QtLocation/qlocationglobal.h>
+#include <QtLocation/private/qlocationglobal_p.h>
 
 QT_BEGIN_NAMESPACE
 
 class QGeoMapTypePrivate;
 
-class Q_LOCATION_EXPORT QGeoMapType
+class Q_LOCATION_PRIVATE_EXPORT QGeoMapType
 {
 public:
     enum MapStyle {
@@ -77,7 +77,7 @@ public:
     QGeoMapType();
     QGeoMapType(const QGeoMapType &other);
     QGeoMapType(MapStyle style, const QString &name, const QString &description, bool mobile,
-                bool night, int mapId);
+                bool night, int mapId, QByteArray pluginName);
     ~QGeoMapType();
 
     QGeoMapType &operator = (const QGeoMapType &other);
@@ -91,6 +91,7 @@ public:
     bool mobile() const;
     bool night() const;
     int mapId() const;
+    QByteArray pluginName() const;
 
 private:
     QSharedDataPointer<QGeoMapTypePrivate> d_ptr;

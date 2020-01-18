@@ -128,19 +128,13 @@ int QGeoMappingManager::managerVersion() const
     return d_ptr->engine->managerVersion();
 }
 
-QGeoCameraCapabilities QGeoMappingManager::cameraCapabilities() const
-{
-    return d_ptr->engine->cameraCapabilities();
-}
-
 /*!
     Returns a new QGeoMap instance which will be managed by this manager.
 */
 QGeoMap *QGeoMappingManager::createMap(QObject *parent)
 {
-    QGeoMap * map = d_ptr->engine->createMap();
-    connect(parent,&QObject::destroyed,map,&QGeoMap::deleteLater);
-    return map;
+    Q_UNUSED(parent)
+    return d_ptr->engine->createMap();
 }
 
 QList<QGeoMapType> QGeoMappingManager::supportedMapTypes() const
@@ -191,7 +185,5 @@ QGeoMappingManagerPrivate::~QGeoMappingManagerPrivate()
     delete engine;
     engine = 0;
 }
-
-#include "moc_qgeomappingmanager_p.cpp"
 
 QT_END_NAMESPACE

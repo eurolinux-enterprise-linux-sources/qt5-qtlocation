@@ -45,13 +45,12 @@ import QtLocation 5.6
 //! [Imports]
 
 Rectangle {
-    width: 360
-    height: 640
+    anchors.fill: parent
 
     //! [Initialize Plugin]
     Plugin {
         id: myPlugin
-        name: "osm"
+        name: "osm" // "mapboxgl", "esri", ...
         //specify plugin parameters if necessary
         //PluginParameter {...}
         //PluginParameter {...}
